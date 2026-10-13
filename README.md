@@ -2,20 +2,17 @@
 
 <h2></h2>
 <p align="center">
-  <a href="#" target="blank">
-    <img alt="GitHub go.mod Go version" src="https://img.shields.io/github/go-mod/go-version/MacroPower/wakatime_exporter">
+  <a href="https://github.com/thib3113/wakatime_exporter/blob/main/go.mod" target="blank">
+    <img alt="GitHub go.mod Go version" src="https://img.shields.io/github/go-mod/go-version/thib3113/wakatime_exporter">
   </a>
-  <a href="https://hub.docker.com/r/macropower/wakatime-exporter" target="blank">
-    <img alt="Docker Image Size (latest by date)" src="https://img.shields.io/docker/image-size/macropower/wakatime-exporter?color=green">
+  <a href="https://hub.docker.com/r/thib3113/wakatime-exporter" target="blank">
+    <img alt="Docker Image Size (latest by date)" src="https://img.shields.io/docker/image-size/thib3113/wakatime-exporter?color=green">
   </a>
-  <a href="https://hub.docker.com/r/macropower/wakatime-exporter" target="blank">
-    <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/macropower/wakatime-exporter">
+  <a href="https://hub.docker.com/r/thib3113/wakatime-exporter" target="blank">
+    <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/thib3113/wakatime-exporter">
   </a>
-  <a href="https://goreportcard.com/report/github.com/MacroPower/wakatime_exporter" target="blank">
-    <img src="https://goreportcard.com/badge/github.com/MacroPower/wakatime_exporter">
-  </a>
-  <a href="https://codeclimate.com/github/MacroPower/wakatime_exporter/maintainability" target="blank">
-    <img src="https://api.codeclimate.com/v1/badges/ed191a2b4937b9f87096/maintainability">
+  <a href="https://goreportcard.com/report/github.com/thib3113/wakatime_exporter" target="blank">
+    <img src="https://goreportcard.com/badge/github.com/thib3113/wakatime_exporter">
   </a>
 </p>
 
@@ -25,6 +22,16 @@ via allowing users to make use of Prometheus (and therefore any consumers of its
 as companion services alongside the traditional Wakatime web application.
 This could be anything from including some of your coding statistics in Grafana,
 to forecasting your coding time with prophet.
+
+> **Actively maintained**: this repository ([thib3113/wakatime_exporter](https://github.com/thib3113/wakatime_exporter))
+> continues the project [MacroPower/wakatime_exporter](https://github.com/MacroPower/wakatime_exporter),
+> which appears unmaintained (last upstream commit: February 2023).
+> It is published as a standalone repository (not a GitHub fork) so it can be found via GitHub search.
+> Many thanks to Jacob Colvin (MacroPower) for creating the project and maintaining it up to v0.1.0 —
+> all of his work is preserved as-is, including the full git history and the original license headers.
+> On top of upstream, this repository adds:
+> OAuth 2.0 Bearer authentication (required since WakaTime API keys become write-only on 01/11/2026),
+> and a new `ai` collector exposing AI coding statistics from the `/durations` endpoint.
 
 > NOTE: _wakatime_exporter_ is currently in ALPHA. Expect things to break and change.
 
@@ -49,6 +56,7 @@ usage: wakatime_exporter --wakatime.api-key=WAKATIME.API-KEY [<flags>]
 
 Flags:
   --help, -h                     Show context-sensitive help.
+  --collector.ai                 Enable the ai collector (default: enabled).
   --collector.all-time           Enable the all-time collector (default: enabled).
   --collector.goal               Enable the goal collector (default: enabled).
   --collector.leader             Enable the leader collector (default: enabled).
@@ -85,6 +93,7 @@ WAKA_AUTH_MODE="auto"                         # Auth mode: auto, basic, or beare
 WAKA_TIMEOUT="5s"                             # Timeout for trying to get stats from Wakatime.
 WAKA_SSL_VERIFY="true"                        # SSL certificate verification for the scrape URI.
 WAKA_DISABLE_EXPORTER_METRICS="false"         # Exclude metrics about the exporter itself.
+WAKA_COLLECTOR_AI="true"                      # Enable the ai collector.
 WAKA_COLLECTOR_ALLTIME="true"                 # Enable the all-time collector.
 WAKA_COLLECTOR_GOAL="true"                    # Enable the goal collector.
 WAKA_COLLECTOR_LEADER="true"                  # Enable the leader collector.
@@ -94,7 +103,7 @@ WAKA_COLLECTOR_SUMMARY="true"                 # Enable the summary collector.
 ## Docker
 
 ```shell
-docker run -p 9212:9212 macropower/wakatime-exporter:latest --wakatime.api-key="YOUR_API_KEY"
+docker run -p 9212:9212 thib3113/wakatime-exporter:latest --wakatime.api-key="YOUR_API_KEY"
 ```
 
 Or use docker-compose:
@@ -119,10 +128,45 @@ or a WakaTime OAuth access token (`waka_tok_...`, `Authorization: Bearer`).
 `auto` uses `Bearer` for `waka_tok_` tokens and `Basic` otherwise;
 `basic` / `bearer` force the mode (useful for testing and unprefixed tokens).
 
-To get an OAuth token, register an app at https://wakatime.com/apps
-(see https://wakatime.com/developers#authentication) with the minimal scopes
-`read_summaries,read_stats,read_goals`, plus `read_private_leaderboards`
-if the `leader` collector is enabled.
+For personal use (your own account), grab a ready-made OAuth token at
+https://wakatime.com/oauth ("Your secret OAuth token") — no app to register.
+It can read your email, summaries, stats, goals, organizations, and coding
+activity, so keep it secret and prefer it over your API key, which is write-only.
+
+To get an OAuth token for other users, register an app at https://wakatime.com/apps
+(see https://wakatime.com/developers#authentication) with at least the scopes
+required by the collectors you enable:
+
+| Collector(s)      | Required OAuth scope(s)          |
+|-------------------|----------------------------------|
+| `summary`, `all-time` | `read_summaries`, `read_stats` |
+| `goal`            | `read_goals`                     |
+| `leader`          | `read_private_leaderboards`      |
+| `ai`              | `read_heartbeats`                |
+
+Note that the `ai` collector needs the broader `read_heartbeats` scope.
+Disable any collector you don't need with `--collector.<name>=false`
+(or `WAKA_COLLECTOR_<NAME>=false`) to follow the least-privilege principle.
+
+## AI collector
+
+The `ai` collector (enabled by default, endpoint `GET /users/{user}/durations?date=today`)
+exposes AI coding statistics:
+
+| Metric                                    | Type    | Labels                  | Description                                              |
+|-------------------------------------------|---------|-------------------------|----------------------------------------------------------|
+| `wakatime_ai_lines_total`                 | counter | `origin` (`ai`/`human`), `kind` (`additions`/`deletions`) | Lines written by AI vs. typed by a human |
+| `wakatime_ai_tokens_total`                | counter | `kind` (`input`/`output`) | AI tokens consumed / produced                          |
+| `wakatime_ai_cost_usd_total`              | counter | `model`                 | Estimated AI model cost in USD                           |
+| `wakatime_ai_sessions_total`              | counter | –                       | Distinct AI sessions                                     |
+| `wakatime_ai_prompt_events_total`         | counter | –                       | Prompts sent to AI tools                                 |
+| `wakatime_ai_prompt_length_chars_sum`     | counter | –                       | Sum of prompt characters                                 |
+| `wakatime_ai_prompt_length_avg_chars`     | gauge   | –                       | Mean prompt length in characters                         |
+| `wakatime_ai_seconds_total`               | counter | `project`               | Coded seconds per project, summed from durations         |
+
+It requires the OAuth scope `read_heartbeats` (see [Authentication](#authentication))
+and returns no data (`ErrNoData`, never a fatal error) when the endpoint has nothing to report.
+Disable it with `--collector.ai=false` or `WAKA_COLLECTOR_AI=false`.
 
 ## Compatibility
 
@@ -134,6 +178,17 @@ via `--wakatime.scrape-uri` or `WAKA_SCRAPE_URI`.
 If said application only implements portions of the Wakatime API,
 you can disable collectors for any non-compliant or non-existent endpoints
 using parameters or environment variables as described in [usage](#usage).
+
+## Credits
+
+- Original author: [Jacob Colvin (MacroPower)](https://github.com/MacroPower) —
+  created `wakatime_exporter` and maintained it up to v0.1.0. Thank you!
+- Current maintainer: [thib3113](https://github.com/thib3113) (OAuth Bearer support, `ai` collector).
+
+The full upstream git history is preserved in this repository, so every commit
+from the previous maintainer stays attributed to him (`git log`, `git blame`).
+Original `Copyright ... MacroPower` license headers are kept untouched in the
+files he wrote; new files carry their own header.
 
 ## License
 
