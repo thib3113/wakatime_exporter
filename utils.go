@@ -21,12 +21,12 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/MacroPower/wakatime_exporter/collector"
+	"github.com/thib3113/wakatime_exporter/collector"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/prometheus/common/version"
 )
 
 // handler wraps an unfiltered http.Handler but uses a filtered handler,
@@ -51,8 +51,8 @@ func newHandler(commonInputs collector.CommonInputs, includeExporterMetrics bool
 	}
 	if h.includeExporterMetrics {
 		h.exporterMetricsRegistry.MustRegister(
-			prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
-			prometheus.NewGoCollector(),
+			collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+			collectors.NewGoCollector(),
 		)
 	}
 	if innerHandler, err := h.innerHandler(); err != nil {
@@ -110,7 +110,7 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 	}
 
 	r := prometheus.NewRegistry()
-	r.MustRegister(version.NewCollector("wakatime_exporter"))
+	r.MustRegister(collectors.NewBuildInfoCollector())
 	if err := r.Register(nc); err != nil {
 		return nil, fmt.Errorf("couldn't register collector: %s", err)
 	}

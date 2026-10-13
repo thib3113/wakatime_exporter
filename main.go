@@ -20,15 +20,39 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strings"
 
+	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
-	"github.com/prometheus/common/promlog"
-	"github.com/prometheus/common/promlog/flag"
 	"github.com/prometheus/common/version"
-	"gopkg.in/alecthomas/kingpin.v2"
+	"github.com/alecthomas/kingpin/v2"
 
-	"github.com/MacroPower/wakatime_exporter/collector"
+	"github.com/thib3113/wakatime_exporter/collector"
 )
+
+// newLogger builds a go-kit logger with the given level and format.
+// It replaces promlog, which was removed from prometheus/common.
+func newLogger(lvl, format string) log.Logger {
+	w := log.NewSyncWriter(os.Stderr)
+	var logger log.Logger
+	if format == "json" {
+		logger = log.NewJSONLogger(w)
+	} else {
+		logger = log.NewLogfmtLogger(w)
+	}
+	var opt level.Option
+	switch strings.ToLower(lvl) {
+	case "debug":
+		opt = level.AllowDebug()
+	case "warn":
+		opt = level.AllowWarn()
+	case "error":
+		opt = level.AllowError()
+	default:
+		opt = level.AllowInfo()
+	}
+	return log.With(level.NewFilter(logger, opt), "ts", log.DefaultTimestampUTC, "caller", log.DefaultCaller)
+}
 
 // UserPath appends the User path to a given URL
 func UserPath(uri *url.URL, user string) url.URL {
@@ -90,20 +114,28 @@ func main() {
 			"wakatime.ssl-verify",
 			"Flag that enables SSL certificate verification for the scrape URI.",
 		).Default("true").Envar("WAKA_SSL_VERIFY").Bool()
+		logLevel = kingpin.Flag(
+			"log.level",
+			"Only log messages with the given severity or above. One of: [debug, info, warn, error]",
+		).Default("info").Enum("debug", "info", "warn", "error")
+
+		logFormat = kingpin.Flag(
+			"log.format",
+			"Output format of log messages. One of: [logfmt, json]",
+		).Default("logfmt").Enum("logfmt", "json")
 	)
 
-	promlogConfig := &promlog.Config{}
-	flag.AddFlags(kingpin.CommandLine, promlogConfig)
 	kingpin.Version(version.Print("wakatime_exporter"))
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
-	logger := promlog.New(promlogConfig)
+	logger := newLogger(*logLevel, *logFormat)
 
 	if *disableDefaultCollectors {
 		collector.DisableDefaultCollectors()
 	}
 	level.Info(logger).Log("msg", "Starting wakatime_exporter", "version", version.Info())
 	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
+	level.Info(logger).Log("msg", "Wakatime auth mode", "mode", collector.EffectiveAuthMode(*wakaToken, *wakaAuthMode))
 
 	wakaBaseURI, err := url.Parse(*wakaScrapeURI)
 	if err != nil {
