@@ -45,8 +45,8 @@ type wakatimeDurationEntry struct {
 	AIPromptEventsAvgPerSession float64 `json:"ai_prompt_events_avg_per_session"`
 	AIPromptEventsMedianPerSession float64 `json:"ai_prompt_events_median_per_session"`
 
-	AIPromptLengthAvg int64 `json:"ai_prompt_length_avg"`
+	AIPromptLengthAvg float64 `json:"ai_prompt_length_avg"`
 	AIPromptLengthAvgPerSession float64 `json:"ai_prompt_length_avg_per_session"`
 	AIPromptLengthMedianPerSession float64 `json:"ai_prompt_length_median_per_session"`
-	AIPromptLengthSum int64 `json:"ai_prompt_length_sum"`
+	AIPromptLengthSum float64 `json:"ai_prompt_length_sum"`
 }

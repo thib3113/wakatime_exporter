@@ -89,8 +89,9 @@ func NewAICollector(in CommonInputs, logger log.Logger) (Collector, error) {
 		),
 		secondsPerProject: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, aiSubsystem, "seconds_total"),
+			// Label is "name" for consistency with wakatime_project_seconds_total.
 			"Total seconds per project, summed from Wakatime durations.",
-			[]string{"project"}, nil,
+			[]string{"name"}, nil,
 		),
 		uri:       in.URI,
 		fetchStat: FetchHTTP(in.Token, in.AuthMode, in.SSLVerify, in.Timeout, logger),
@@ -107,13 +108,12 @@ func (c *aiCollector) Update(ch chan<- prometheus.Metric) error {
 	if fetchErr != nil {
 		return fetchErr
 	}
+	defer body.Close()
 
 	durations := wakatimeDurations{}
 	if err := ReadAndUnmarshal(body, &durations); err != nil {
 		return err
 	}
-
-	defer body.Close()
 
 	if len(durations.Data) == 0 {
 		return ErrNoData
@@ -130,7 +130,7 @@ func (c *aiCollector) Update(ch chan<- prometheus.Metric) error {
 	var aiAdditions, aiDeletions, humanAdditions, humanDeletions int64
 	var aiInputTokens, aiOutputTokens int64
 	var aiSessions, aiPromptEvents int64
-	var aiPromptLengthSum int64
+	var aiPromptLengthSum float64
 	costsByModel := map[string]float64{}
 	secondsByProject := map[string]float64{}
 
@@ -172,7 +172,7 @@ func (c *aiCollector) Update(ch chan<- prometheus.Metric) error {
 
 	var promptLengthAvg float64
 	if aiPromptEvents > 0 {
-		promptLengthAvg = float64(aiPromptLengthSum) / float64(aiPromptEvents)
+		promptLengthAvg = aiPromptLengthSum / float64(aiPromptEvents)
 	}
 	ch <- prometheus.MustNewConstMetric(c.promptLengthAvg, prometheus.GaugeValue, promptLengthAvg)
 

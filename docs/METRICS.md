@@ -104,7 +104,7 @@ wakatime_ai_prompt_length_avg_chars 33.333333333333336
 
 # HELP wakatime_ai_seconds_total Total seconds per project, summed from Wakatime durations.
 # TYPE wakatime_ai_seconds_total counter
-wakatime_ai_seconds_total{project="wakatime-exporter"} 200
+wakatime_ai_seconds_total{name="wakatime-exporter"} 200
 ```
 
 Additionally, wakatime_exporter exports its own metrics, and metrics for each collector (`[ai, alltime, goal, leader, summary]`).

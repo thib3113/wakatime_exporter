@@ -30,7 +30,7 @@ to forecasting your coding time with prophet.
 > Many thanks to Jacob Colvin (MacroPower) for creating the project and maintaining it up to v0.1.0 —
 > all of his work is preserved as-is, including the full git history and the original license headers.
 > On top of upstream, this repository adds:
-> OAuth 2.0 Bearer authentication (required since WakaTime API keys become write-only on 01/11/2026),
+> OAuth 2.0 Bearer authentication (required since WakaTime API keys become write-only on 2026-11-01),
 > and a new `ai` collector exposing AI coding statistics from the `/durations` endpoint.
 
 > NOTE: _wakatime_exporter_ is currently in ALPHA. Expect things to break and change.
@@ -110,12 +110,12 @@ Or use docker-compose:
 
 ```shell
 # Linux & Darwin
-WAKA_API_KEY="YOUR_API_KEY" docker-compose up
+WAKA_API_KEY="YOUR_API_KEY" docker compose up
 ```
 
 ```powershell
 # Windows
-$env:WAKA_API_KEY="YOUR_API_KEY"; docker-compose up
+$env:WAKA_API_KEY="YOUR_API_KEY"; docker compose up
 ```
 
 ## Authentication
@@ -162,7 +162,7 @@ exposes AI coding statistics:
 | `wakatime_ai_prompt_events_total`         | counter | –                       | Prompts sent to AI tools                                 |
 | `wakatime_ai_prompt_length_chars_sum`     | counter | –                       | Sum of prompt characters                                 |
 | `wakatime_ai_prompt_length_avg_chars`     | gauge   | –                       | Mean prompt length in characters                         |
-| `wakatime_ai_seconds_total`               | counter | `project`               | Coded seconds per project, summed from durations         |
+| `wakatime_ai_seconds_total`               | counter | `name`                  | Coded seconds per project, summed from durations (same label as `wakatime_project_seconds_total`) |
 
 It requires the OAuth scope `read_heartbeats` (see [Authentication](#authentication))
 and returns no data (`ErrNoData`, never a fatal error) when the endpoint has nothing to report.
