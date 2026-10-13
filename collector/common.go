@@ -42,20 +42,31 @@ const (
 // OAuthTokenPrefix is the prefix identifying a WakaTime OAuth access token.
 const OAuthTokenPrefix = "waka_tok_"
 
+// EffectiveAuthMode resolves the auth mode actually used for requests:
+// an explicit "bearer"/"basic" mode wins, "auto" (or any unknown value)
+// detects OAuth tokens by prefix. It never touches the token itself,
+// so logging its result is safe.
+func EffectiveAuthMode(token string, authMode string) string {
+	switch authMode {
+	case AuthModeBearer:
+		return AuthModeBearer
+	case AuthModeBasic:
+		return AuthModeBasic
+	default: // AuthModeAuto and any unknown value: detect OAuth tokens by prefix.
+		if strings.HasPrefix(token, OAuthTokenPrefix) {
+			return AuthModeBearer
+		}
+		return AuthModeBasic
+	}
+}
+
 // AuthorizationHeader builds the value of the Authorization header for the
 // given token and auth mode, without ever logging the token itself.
 func AuthorizationHeader(token string, authMode string) string {
-	switch authMode {
-	case AuthModeBearer:
+	if EffectiveAuthMode(token, authMode) == AuthModeBearer {
 		return "Bearer " + token
-	case AuthModeBasic:
-		return "Basic " + base64.StdEncoding.EncodeToString([]byte(token))
-	default: // AuthModeAuto and any unknown value: detect OAuth tokens by prefix.
-		if strings.HasPrefix(token, OAuthTokenPrefix) {
-			return "Bearer " + token
-		}
-		return "Basic " + base64.StdEncoding.EncodeToString([]byte(token))
 	}
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(token))
 }
 
 // Namespace defines the common namespace to be used by all metrics.

@@ -1,0 +1,63 @@
+name: 'Build and push release'
+inputs:
+  VERSION:
+    description: 'The release version (e.g. v1.2.3)'
+    required: true
+  IMAGES:
+    description: 'Newline-separated list of image names (without tag)'
+    required: true
+  GITHUB_TOKEN:
+    description: 'github token'
+    required: true
+  DOCKERHUB_USERNAME:
+    description: 'docker username (empty skips the Docker Hub push)'
+    required: false
+    default: ''
+  DOCKERHUB_TOKEN:
+    description: 'docker token'
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup QEMU
+      uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+    - name: Setup Docker buildx
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+      with:
+        images: ${{ inputs.IMAGES }}
+        tags: |
+          type=semver,pattern={{version}},value=${{ inputs.VERSION }}
+          type=semver,pattern={{major}}.{{minor}},value=${{ inputs.VERSION }}
+          type=semver,pattern={{major}},value=${{ inputs.VERSION }}
+          type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.GITHUB_TOKEN }}
+
+    - name: Login to Docker Hub
+      if: ${{ inputs.DOCKERHUB_USERNAME != '' }}
+      uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      with:
+        username: ${{ inputs.DOCKERHUB_USERNAME }}
+        password: ${{ inputs.DOCKERHUB_TOKEN }}
+
+    - name: Build and push image
+      uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        push: true
+        build-args: "VERSION=${{ inputs.VERSION }}"

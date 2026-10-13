@@ -121,6 +121,9 @@ func (c *summaryCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 
 	resultLength := len(summaryStats.Data)
+	if resultLength == 0 {
+		return ErrNoData
+	}
 	if resultLength != 1 {
 		level.Error(c.logger).Log("msg", "length of results is incorrect", "size", resultLength)
 	}

@@ -5,7 +5,7 @@ networks:
 
 services:
   wakatime-exporter:
-    image: macropower/wakatime-exporter:latest
+    image: thib3113/wakatime-exporter:latest
     ports:
       - '9212:9212'
     environment:
