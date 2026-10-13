@@ -69,6 +69,44 @@ wakatime_rank 2886
 # HELP wakatime_cumulative_seconds_total Total seconds (all time).
 # TYPE wakatime_cumulative_seconds_total counter
 wakatime_cumulative_seconds_total 219501.379948
+
+# HELP wakatime_ai_lines_total Total lines attributed to AI vs human typing, from Wakatime durations.
+# TYPE wakatime_ai_lines_total counter
+wakatime_ai_lines_total{kind="additions",origin="ai"} 13
+wakatime_ai_lines_total{kind="deletions",origin="ai"} 2
+wakatime_ai_lines_total{kind="additions",origin="human"} 5
+wakatime_ai_lines_total{kind="deletions",origin="human"} 1
+
+# HELP wakatime_ai_tokens_total Total AI tokens used, from Wakatime durations.
+# TYPE wakatime_ai_tokens_total counter
+wakatime_ai_tokens_total{kind="input"} 150
+wakatime_ai_tokens_total{kind="output"} 210
+
+# HELP wakatime_ai_cost_usd_total Estimated AI model cost in USD, from Wakatime durations.
+# TYPE wakatime_ai_cost_usd_total counter
+wakatime_ai_cost_usd_total{model="claude"} 0.0133
+
+# HELP wakatime_ai_sessions_total Total distinct AI sessions, from Wakatime durations.
+# TYPE wakatime_ai_sessions_total counter
+wakatime_ai_sessions_total 2
+
+# HELP wakatime_ai_prompt_events_total Total number of prompts sent to AI tools, from Wakatime durations.
+# TYPE wakatime_ai_prompt_events_total counter
+wakatime_ai_prompt_events_total 3
+
+# HELP wakatime_ai_prompt_length_chars_sum Sum of user prompt characters typed to AI, from Wakatime durations.
+# TYPE wakatime_ai_prompt_length_chars_sum counter
+wakatime_ai_prompt_length_chars_sum 100
+
+# HELP wakatime_ai_prompt_length_avg_chars Mean prompt length in characters (sum / prompt events), from Wakatime durations.
+# TYPE wakatime_ai_prompt_length_avg_chars gauge
+wakatime_ai_prompt_length_avg_chars 33.333333333333336
+
+# HELP wakatime_ai_seconds_total Total seconds per project, summed from Wakatime durations.
+# TYPE wakatime_ai_seconds_total counter
+wakatime_ai_seconds_total{project="wakatime-exporter"} 200
 ```
 
-Additionally, wakatime_exporter exports its own metrics, and metrics for each collector (`[alltime, goal, leader, summary]`).
+Additionally, wakatime_exporter exports its own metrics, and metrics for each collector (`[ai, alltime, goal, leader, summary]`).
+
+> The `ai` collector queries `GET /users/{user}/durations?date=today` and requires the OAuth scope `read_heartbeats` (broader than the other collectors).
