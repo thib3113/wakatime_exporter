@@ -11,9 +11,6 @@
   <a href="https://hub.docker.com/r/thib3113/wakatime-exporter" target="blank">
     <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/thib3113/wakatime-exporter">
   </a>
-  <a href="https://goreportcard.com/report/github.com/thib3113/wakatime_exporter" target="blank">
-    <img src="https://goreportcard.com/badge/github.com/thib3113/wakatime_exporter">
-  </a>
 </p>
 
 _wakatime_exporter_ is a Prometheus exporter for [Wakatime](https://wakatime.com/) statistics.
