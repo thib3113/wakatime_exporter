@@ -106,7 +106,7 @@ WAKA_COLLECTOR_SUMMARY="true"                 # Enable the summary collector.
 docker run -p 9212:9212 thib3113/wakatime-exporter:latest --wakatime.api-key="YOUR_API_KEY"
 ```
 
-Or use docker-compose:
+Or use Docker Compose:
 
 ```shell
 # Linux & Darwin
