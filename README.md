@@ -1,4 +1,4 @@
-<a href="#"><img src="docs/img/waka_header.png"></a>
+<a href="#"><img src="https://raw.githubusercontent.com/thib3113/wakatime_exporter/main/docs/img/waka_header.png"></a>
 
 <h2></h2>
 <p align="center">
@@ -36,7 +36,7 @@ to forecasting your coding time with prophet.
 
 [Click here](https://grafana.com/grafana/dashboards/12790) for a simple dashboard you can use to get started.
 
-<a href="#"><img src="docs/img/example.png"></a>
+<a href="#"><img src="https://raw.githubusercontent.com/thib3113/wakatime_exporter/main/docs/img/example.png"></a>
 
 ## Usage
 
