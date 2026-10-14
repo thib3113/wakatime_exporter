@@ -7,5 +7,13 @@
     ":configMigration",
     ":automergePatch",
     ":automergeMinor"
+  ],
+  "packageRules": [
+    {
+      "description": "Never pin our own image: keep the floating tag",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["thib3113/wakatime-exporter"],
+      "enabled": false
+    }
   ]
 }
