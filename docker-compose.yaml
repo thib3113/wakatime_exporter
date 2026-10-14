@@ -25,7 +25,7 @@ services:
       - wakatime-exporter
 
   prometheus:
-    image: prom/prometheus:v2.29.1
+    image: prom/prometheus:v2.29.2@sha256:0205de008ba4fcd6d054d7375fbabcbc5239ee6919a287d89b6a5dc244a1b43e
     ports:
       - 9090:9090
     volumes:
