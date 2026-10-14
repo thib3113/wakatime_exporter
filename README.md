@@ -2,15 +2,9 @@
 
 <h2></h2>
 <p align="center">
-  <a href="https://github.com/thib3113/wakatime_exporter/blob/main/go.mod" target="blank">
-    <img alt="GitHub go.mod Go version" src="https://img.shields.io/github/go-mod/go-version/thib3113/wakatime_exporter">
-  </a>
-  <a href="https://hub.docker.com/r/thib3113/wakatime-exporter" target="blank">
-    <img alt="Docker Image Size (latest by date)" src="https://img.shields.io/docker/image-size/thib3113/wakatime-exporter?color=green">
-  </a>
-  <a href="https://hub.docker.com/r/thib3113/wakatime-exporter" target="blank">
-    <img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/thib3113/wakatime-exporter">
-  </a>
+  <a href="https://github.com/thib3113/wakatime_exporter/blob/main/go.mod"><img alt="GitHub go.mod Go version" src="https://img.shields.io/github/go-mod/go-version/thib3113/wakatime_exporter"></a>
+  <a href="https://hub.docker.com/r/thib3113/wakatime-exporter"><img alt="Docker Image Size (latest by date)" src="https://img.shields.io/docker/image-size/thib3113/wakatime-exporter?color=green"></a>
+  <a href="https://hub.docker.com/r/thib3113/wakatime-exporter"><img alt="Docker Pulls" src="https://img.shields.io/docker/pulls/thib3113/wakatime-exporter"></a>
 </p>
 
 _wakatime_exporter_ is a Prometheus exporter for [Wakatime](https://wakatime.com/) statistics.
