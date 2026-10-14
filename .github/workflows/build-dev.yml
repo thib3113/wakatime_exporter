@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   build:
@@ -16,3 +17,6 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - uses: ./.github/actions/build-dev
+        with:
+          IMAGES: ghcr.io/thib3113/wakatime-exporter
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
