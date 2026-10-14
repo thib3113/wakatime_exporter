@@ -14,7 +14,7 @@ services:
       - wakatime-exporter
 
   grafana:
-    image: grafana/grafana:8.1.1
+    image: grafana/grafana:8.5.27@sha256:b43abed8a2b8c5a4055c3729d77ae11c9646c4b9feefb5c136b7c67dcdad21c0
     ports:
       - '3000:3000'
     volumes:
