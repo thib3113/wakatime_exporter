@@ -346,6 +346,11 @@ func main() {
 	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
 	level.Info(logger).Log("msg", "Wakatime auth mode", "mode", collector.EffectiveAuthMode(*wakaToken, *wakaAuthMode))
 
+	if *wakaUser == "" || *wakaUser == "." || *wakaUser == ".." || strings.ContainsAny(*wakaUser, `/\`) {
+		level.Error(logger).Log("msg", "Invalid WakaTime user", "user", *wakaUser)
+		os.Exit(1)
+	}
+
 	wakaBaseURI, err := url.Parse(*wakaScrapeURI)
 	if err != nil {
 		level.Error(logger).Log("msg", "Error parsing URL", "err", err)

@@ -21,7 +21,6 @@ import (
 	"io"
 	"net/url"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -67,14 +66,7 @@ type insightsCollector struct {
 	fetchStat      func(url.URL, string, url.Values) (io.ReadCloser, error)
 	logger         log.Logger
 
-	mu      sync.Mutex
-	cache   map[string]insightCacheEntry
-	flights flightGroup
-}
-
-type insightCacheEntry struct {
-	data  *wakatimeInsights
-	until time.Time
+	cache keyedTTLCache[wakatimeInsights]
 }
 
 func init() {
@@ -149,7 +141,6 @@ func NewInsightsCollector(in CommonInputs, logger log.Logger) (Collector, error)
 		uri:        in.URI,
 		fetchStat:  FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
 		logger:     logger,
-		cache:      map[string]insightCacheEntry{},
 	}, nil
 }
 
@@ -181,35 +172,23 @@ func (c *insightsCollector) Update(ch chan<- prometheus.Metric) error {
 }
 
 func (c *insightsCollector) getInsight(insightType string) (*wakatimeInsights, error) {
-	c.mu.Lock()
-	if entry, ok := c.cache[insightType]; ok && time.Now().Before(entry.until) {
-		data := entry.data
-		c.mu.Unlock()
-		return data, nil
-	}
-	c.mu.Unlock()
-
-	return singleflightDo(&c.flights, insightType, func() (*wakatimeInsights, error) {
+	return c.cache.getWithTTL(insightType, func() (*wakatimeInsights, time.Duration, error) {
 		body, fetchErr := c.fetchStat(c.uri, insightsEndpoint+"/"+insightType+"/"+c.rangeName, url.Values{})
 		if fetchErr != nil {
-			return nil, fetchErr
+			return nil, 0, fetchErr
 		}
 		defer body.Close()
 
 		var response wakatimeInsights
 		if err := ReadAndUnmarshal(body, &response); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
-		cacheTTL := c.cacheTTL
+		ttl := c.cacheTTL
 		if !response.IsUpToDate && !rawBool(response.Data, "is_up_to_date") {
-			cacheTTL = time.Minute
+			ttl = time.Minute
 		}
-
-		c.mu.Lock()
-		c.cache[insightType] = insightCacheEntry{data: &response, until: time.Now().Add(cacheTTL)}
-		c.mu.Unlock()
-		return &response, nil
+		return &response, ttl, nil
 	})
 }
 

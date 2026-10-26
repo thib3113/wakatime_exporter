@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"sort"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -119,19 +118,10 @@ func (c *userAgentsCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 
 	ch <- prometheus.MustNewConstMetric(c.available, prometheus.GaugeValue, float64(len(data.Data)))
-	agents := make([]wakatimeUserAgent, 0, len(data.Data))
-	for _, agent := range data.Data {
-		if !c.filter.Match(dimensionValue("editor", agent.Editor)) {
-			continue
-		}
-		agents = append(agents, agent)
-	}
-	sort.SliceStable(agents, func(i, j int) bool {
-		return parseUnixSeconds(agents[i].LastSeenAt) > parseUnixSeconds(agents[j].LastSeenAt)
-	})
-	if c.top > 0 && len(agents) > c.top {
-		agents = agents[:c.top]
-	}
+	agents := selectInventory(data.Data, "editor",
+		func(agent wakatimeUserAgent) string { return agent.Editor },
+		func(agent wakatimeUserAgent) float64 { return parseUnixSecondsOrZero(agent.LastSeenAt) },
+		c.filter, c.top)
 	if len(agents) == 0 {
 		ch <- prometheus.MustNewConstMetric(c.total, prometheus.GaugeValue, 0)
 		return nil
@@ -151,8 +141,8 @@ func (c *userAgentsCollector) Update(ch chan<- prometheus.Metric) error {
 			boolLabel(agent.IsBrowserExtension),
 			boolLabel(agent.IsDesktopApp),
 		)
-		ch <- prometheus.MustNewConstMetric(c.lastSeen, prometheus.GaugeValue, parseUnixSeconds(agent.LastSeenAt), agent.ID, agent.Editor)
-		ch <- prometheus.MustNewConstMetric(c.created, prometheus.GaugeValue, parseUnixSeconds(agent.CreatedAt), agent.ID, agent.Editor)
+		emitTimestamp(ch, c.lastSeen, agent.LastSeenAt, agent.ID, agent.Editor)
+		emitTimestamp(ch, c.created, agent.CreatedAt, agent.ID, agent.Editor)
 	}
 
 	return nil

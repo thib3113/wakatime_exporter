@@ -84,9 +84,9 @@ wakatime_ai_prompt_length_chars_sum 120
 # TYPE wakatime_ai_prompt_length_avg_chars gauge
 wakatime_ai_prompt_length_avg_chars 30
 
-# HELP wakatime_ai_seconds_total Total seconds per project, summed from Wakatime durations.
-# TYPE wakatime_ai_seconds_total counter
-wakatime_ai_seconds_total{name="example-project"} 300
+# HELP wakatime_durations_seconds_total Total seconds per project, summed from Wakatime durations.
+# TYPE wakatime_durations_seconds_total counter
+wakatime_durations_seconds_total{name="example-project"} 300
 
 # HELP wakatime_stats_seconds Coding seconds for the configured range, excluding Other.
 # TYPE wakatime_stats_seconds gauge

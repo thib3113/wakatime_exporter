@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"sort"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -119,19 +118,10 @@ func (c *machinesCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 
 	ch <- prometheus.MustNewConstMetric(c.available, prometheus.GaugeValue, float64(len(data.Data)))
-	machines := make([]wakatimeMachine, 0, len(data.Data))
-	for _, machine := range data.Data {
-		if !c.filter.Match(dimensionValue("machine", machine.Name)) {
-			continue
-		}
-		machines = append(machines, machine)
-	}
-	sort.SliceStable(machines, func(i, j int) bool {
-		return parseUnixSeconds(machines[i].LastSeenAt) > parseUnixSeconds(machines[j].LastSeenAt)
-	})
-	if c.top > 0 && len(machines) > c.top {
-		machines = machines[:c.top]
-	}
+	machines := selectInventory(data.Data, "machine",
+		func(machine wakatimeMachine) string { return machine.Name },
+		func(machine wakatimeMachine) float64 { return parseUnixSecondsOrZero(machine.LastSeenAt) },
+		c.filter, c.top)
 	if len(machines) == 0 {
 		ch <- prometheus.MustNewConstMetric(c.total, prometheus.GaugeValue, 0)
 		return nil
@@ -146,8 +136,8 @@ func (c *machinesCollector) Update(ch chan<- prometheus.Metric) error {
 			machine.IP,
 			machine.Timezone,
 		)
-		ch <- prometheus.MustNewConstMetric(c.lastSeen, prometheus.GaugeValue, parseUnixSeconds(machine.LastSeenAt), machine.ID, machine.Name)
-		ch <- prometheus.MustNewConstMetric(c.created, prometheus.GaugeValue, parseUnixSeconds(machine.CreatedAt), machine.ID, machine.Name)
+		emitTimestamp(ch, c.lastSeen, machine.LastSeenAt, machine.ID, machine.Name)
+		emitTimestamp(ch, c.created, machine.CreatedAt, machine.ID, machine.Name)
 	}
 
 	return nil

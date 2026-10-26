@@ -102,30 +102,26 @@ func NewOrgsCollector(in CommonInputs, logger log.Logger) (Collector, error) {
 
 func (c *orgsCollector) Update(ch chan<- prometheus.Metric) error {
 	data, err := c.cache.get(c.cacheTTL, func() (*wakatimeOrgs, error) {
-		all := wakatimeOrgs{}
-		for page := 1; page <= maxOrgPages; page++ {
+		orgs, err := paginate(maxOrgPages, func(page int) ([]wakatimeOrg, int, error) {
 			params := url.Values{}
 			params.Set("page", strconv.Itoa(page))
 
 			body, fetchErr := c.fetchStat(c.uri, orgsEndpoint, params)
 			if fetchErr != nil {
-				return nil, fetchErr
+				return nil, 0, fetchErr
 			}
 			var response wakatimeOrgs
 			unmarshalErr := ReadAndUnmarshal(body, &response)
 			body.Close()
 			if unmarshalErr != nil {
-				return nil, unmarshalErr
+				return nil, 0, unmarshalErr
 			}
-
-			all.Data = append(all.Data, response.Data...)
-			all.Total = response.Total
-			all.TotalPages = response.TotalPages
-			if response.TotalPages == 0 || page >= response.TotalPages {
-				break
-			}
+			return response.Data, response.TotalPages, nil
+		})
+		if err != nil {
+			return nil, err
 		}
-		return &all, nil
+		return &wakatimeOrgs{Data: orgs}, nil
 	})
 	if err != nil {
 		return err

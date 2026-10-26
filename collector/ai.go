@@ -87,11 +87,10 @@ func NewAICollector(in CommonInputs, logger log.Logger) (Collector, error) {
 			"Mean prompt length in characters (sum / prompt events), from Wakatime durations.",
 			nil, nil,
 		),
-		secondsPerProject: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, aiSubsystem, "seconds_total"),
-			// Label is "name" for consistency with wakatime_project_seconds_total.
+		secondsPerProject: newMetricDesc(
+			"durations_seconds_total",
 			"Total seconds per project, summed from Wakatime durations.",
-			[]string{"name"}, nil,
+			"name",
 		),
 		uri:       in.URI,
 		fetchStat: FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),

@@ -23,8 +23,10 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -77,7 +79,10 @@ const (
 	apiSlotTimeout           = 30 * time.Second
 )
 
-var apiRequestSlots = make(chan struct{}, maxConcurrentAPIRequests)
+var (
+	apiRequestSlots = make(chan struct{}, maxConcurrentAPIRequests)
+	rateLimitUntil  atomic.Int64
+)
 
 // FetchHTTP is a generic fetch method for Wakatime API endpoints
 func FetchHTTP(client *http.Client, token string, authMode string, logger log.Logger) func(uri url.URL, subPath string, params url.Values) (io.ReadCloser, error) {
@@ -99,6 +104,10 @@ func FetchHTTP(client *http.Client, token string, authMode string, logger log.Lo
 
 		req.Header = map[string][]string{
 			"Authorization": {authHeader},
+		}
+
+		if until := rateLimitUntil.Load(); until > 0 && time.Now().Unix() < until {
+			return nil, fmt.Errorf("rate limited by WakaTime until %s", time.Unix(until, 0).UTC().Format(time.RFC3339))
 		}
 
 		timer := time.NewTimer(apiSlotTimeout)
@@ -130,6 +139,30 @@ func FetchHTTP(client *http.Client, token string, authMode string, logger log.Lo
 	}
 }
 
+func parseRetryAfter(value string) time.Duration {
+	const defaultBackoff = 30 * time.Second
+	if value == "" {
+		return defaultBackoff
+	}
+	if seconds, err := strconv.Atoi(value); err == nil {
+		return clampBackoff(time.Duration(seconds) * time.Second)
+	}
+	if when, err := http.ParseTime(value); err == nil {
+		return clampBackoff(time.Until(when))
+	}
+	return defaultBackoff
+}
+
+func clampBackoff(delay time.Duration) time.Duration {
+	if delay < time.Second {
+		return time.Second
+	}
+	if delay > 5*time.Minute {
+		return 5 * time.Minute
+	}
+	return delay
+}
+
 func httpStatusError(resp *http.Response) error {
 	switch resp.StatusCode {
 	case 401:
@@ -139,10 +172,9 @@ func httpStatusError(resp *http.Response) error {
 	case 403:
 		return fmt.Errorf("HTTP status 403: forbidden (missing OAuth scope?)")
 	case 429:
-		if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
-			return fmt.Errorf("HTTP status 429: rate limited (retry after %s)", retryAfter)
-		}
-		return fmt.Errorf("HTTP status 429: rate limited")
+		delay := parseRetryAfter(resp.Header.Get("Retry-After"))
+		rateLimitUntil.Store(time.Now().Add(delay).Unix())
+		return fmt.Errorf("HTTP status 429: rate limited (retry after %s)", delay)
 	default:
 		return fmt.Errorf("HTTP status %d", resp.StatusCode)
 	}

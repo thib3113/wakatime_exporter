@@ -19,9 +19,11 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHTTPStatusError(t *testing.T) {
+	defer rateLimitUntil.Store(0)
 	cases := []struct {
 		status int
 		header http.Header
@@ -38,5 +40,26 @@ func TestHTTPStatusError(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("status %d: got %v, want containing %q", tc.status, err, tc.want)
 		}
+	}
+}
+
+func TestParseRetryAfter(t *testing.T) {
+	if got := parseRetryAfter("30"); got != 30*time.Second {
+		t.Fatalf("parseRetryAfter(30) = %v, want 30s", got)
+	}
+	if got := parseRetryAfter(""); got != 30*time.Second {
+		t.Fatalf("parseRetryAfter(empty) = %v, want 30s", got)
+	}
+	if got := parseRetryAfter("0"); got != time.Second {
+		t.Fatalf("parseRetryAfter(0) = %v, want 1s", got)
+	}
+	if got := parseRetryAfter("999999"); got != 5*time.Minute {
+		t.Fatalf("parseRetryAfter(big) = %v, want 5m", got)
+	}
+	if got := parseRetryAfter("garbage"); got != 30*time.Second {
+		t.Fatalf("parseRetryAfter(garbage) = %v, want 30s", got)
+	}
+	if got := parseRetryAfter(time.Now().Add(10 * time.Second).UTC().Format(http.TimeFormat)); got < time.Second || got > 5*time.Minute {
+		t.Fatalf("parseRetryAfter(date) = %v", got)
 	}
 }

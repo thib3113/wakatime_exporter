@@ -20,7 +20,6 @@ import (
 	"io"
 	"net/url"
 	"regexp"
-	"sort"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -137,22 +136,19 @@ func (c *projectsCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 
 	ch <- prometheus.MustNewConstMetric(c.available, prometheus.GaugeValue, float64(len(data.Data)))
-	projects := make([]wakatimeProject, 0, len(data.Data))
-	for _, project := range data.Data {
-		if c.projectFilter != nil && !c.projectFilter.MatchString(project.Name) {
-			continue
+	candidates := data.Data
+	if c.projectFilter != nil {
+		candidates = make([]wakatimeProject, 0, len(data.Data))
+		for _, project := range data.Data {
+			if c.projectFilter.MatchString(project.Name) {
+				candidates = append(candidates, project)
+			}
 		}
-		if !c.inventoryFilter.Match(dimensionValue("project", project.Name)) {
-			continue
-		}
-		projects = append(projects, project)
 	}
-	sort.SliceStable(projects, func(i, j int) bool {
-		return parseUnixSeconds(projects[i].LastHeartbeatAt) > parseUnixSeconds(projects[j].LastHeartbeatAt)
-	})
-	if c.top > 0 && len(projects) > c.top {
-		projects = projects[:c.top]
-	}
+	projects := selectInventory(candidates, "project",
+		func(project wakatimeProject) string { return project.Name },
+		func(project wakatimeProject) float64 { return parseUnixSecondsOrZero(project.LastHeartbeatAt) },
+		c.inventoryFilter, c.top)
 	if len(projects) == 0 {
 		ch <- prometheus.MustNewConstMetric(c.total, prometheus.GaugeValue, 0)
 		return nil
@@ -165,9 +161,9 @@ func (c *projectsCollector) Update(ch chan<- prometheus.Metric) error {
 			project.Repository,
 			boolLabel(project.HasPublicURL),
 		)
-		ch <- prometheus.MustNewConstMetric(c.first, prometheus.GaugeValue, parseUnixSeconds(project.FirstHeartbeatAt), project.Name)
-		ch <- prometheus.MustNewConstMetric(c.last, prometheus.GaugeValue, parseUnixSeconds(project.LastHeartbeatAt), project.Name)
-		ch <- prometheus.MustNewConstMetric(c.created, prometheus.GaugeValue, parseUnixSeconds(project.CreatedAt), project.Name)
+		emitTimestamp(ch, c.first, project.FirstHeartbeatAt, project.Name)
+		emitTimestamp(ch, c.last, project.LastHeartbeatAt, project.Name)
+		emitTimestamp(ch, c.created, project.CreatedAt, project.Name)
 	}
 
 	level.Info(c.logger).Log("msg", "Collecting projects from Wakatime", "count", len(projects))

@@ -20,7 +20,6 @@ import (
 	"io"
 	"net/url"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -57,14 +56,7 @@ type aiBreakdownCollector struct {
 	fetchStat       func(url.URL, string, url.Values) (io.ReadCloser, error)
 	logger          log.Logger
 
-	mu      sync.Mutex
-	cache   map[string]aiBreakdownCacheEntry
-	flights flightGroup
-}
-
-type aiBreakdownCacheEntry struct {
-	data  *wakatimeDurations
-	until time.Time
+	cache keyedTTLCache[wakatimeDurations]
 }
 
 type aiBreakdownAggregate struct {
@@ -144,7 +136,6 @@ func NewAIBreakdownCollector(in CommonInputs, logger log.Logger) (Collector, err
 		uri:        in.URI,
 		fetchStat:  FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
 		logger:     logger,
-		cache:      map[string]aiBreakdownCacheEntry{},
 	}, nil
 }
 
@@ -178,15 +169,7 @@ func (c *aiBreakdownCollector) Update(ch chan<- prometheus.Metric) error {
 }
 
 func (c *aiBreakdownCollector) getDurations(dimension string) (*wakatimeDurations, error) {
-	c.mu.Lock()
-	if entry, ok := c.cache[dimension]; ok && time.Now().Before(entry.until) {
-		data := entry.data
-		c.mu.Unlock()
-		return data, nil
-	}
-	c.mu.Unlock()
-
-	return singleflightDo(&c.flights, dimension, func() (*wakatimeDurations, error) {
+	return c.cache.get(dimension, c.cacheTTL, func() (*wakatimeDurations, error) {
 		params := url.Values{}
 		params.Add("date", "today")
 		params.Add("slice_by", dimension)
@@ -202,10 +185,6 @@ func (c *aiBreakdownCollector) getDurations(dimension string) (*wakatimeDuration
 		if err := ReadAndUnmarshal(body, &response); err != nil {
 			return nil, err
 		}
-
-		c.mu.Lock()
-		c.cache[dimension] = aiBreakdownCacheEntry{data: &response, until: time.Now().Add(c.cacheTTL)}
-		c.mu.Unlock()
 		return &response, nil
 	})
 }

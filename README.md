@@ -266,7 +266,7 @@ exposes AI coding statistics:
 | `wakatime_ai_prompt_events_total`         | counter | –                       | Prompts sent to AI tools                                 |
 | `wakatime_ai_prompt_length_chars_sum`     | counter | –                       | Sum of prompt characters                                 |
 | `wakatime_ai_prompt_length_avg_chars`     | gauge   | –                       | Mean prompt length in characters                         |
-| `wakatime_ai_seconds_total`               | counter | `name`                  | Coded seconds per project, summed from durations (same label as `wakatime_project_seconds_total`) |
+| `wakatime_durations_seconds_total`        | counter | `name`                  | Coded seconds per project, summed from durations (same label as `wakatime_project_seconds_total`) |
 
 It requires the OAuth scope `read_heartbeats` (see [Authentication](#authentication))
 and returns no data (`ErrNoData`, never a fatal error) when the endpoint has nothing to report.
@@ -324,6 +324,10 @@ non-zero AI field.
 
 `ai_model_costs` are WakaTime cost estimates; use `ai_model_lines` (or tokens)
 for usage.
+
+`wakatime_durations_seconds_total` replaces the former
+`wakatime_ai_seconds_total`; it still measures all durations, not only
+AI-attributed time.
 
 `--stats.range` accepts `all_time`, `last_7_days`, `last_30_days`,
 `last_6_months`, `last_year`, a year (`YYYY`), or a month (`YYYY-MM`).
@@ -554,6 +558,9 @@ dimensions, insights types, leaderboard pages). There is no scrape-context
 propagation; `--wakatime.timeout` bounds each request and the 30 s handler
 timeout bounds the HTTP response, but in-flight work may continue until those
 requests finish.
+
+HTTP 429 responses set a global backoff from `Retry-After` (1 s to 5 min);
+scrapes fail fast until it expires instead of hammering WakaTime.
 
 ### Exposure
 

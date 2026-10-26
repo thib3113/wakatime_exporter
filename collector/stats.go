@@ -20,7 +20,6 @@ import (
 	"io"
 	"net/url"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -77,10 +76,7 @@ type statsCollector struct {
 	fetchStat  func(url.URL, string, url.Values) (io.ReadCloser, error)
 	logger     log.Logger
 
-	mu          sync.Mutex
-	cached      *wakatimeStatsData
-	cachedUntil time.Time
-	flights     flightGroup
+	cache keyedTTLCache[wakatimeStatsData]
 }
 
 func init() {
@@ -330,28 +326,24 @@ func (c *statsCollector) Update(ch chan<- prometheus.Metric) error {
 }
 
 func (c *statsCollector) getStats() (*wakatimeStatsData, error) {
-	c.mu.Lock()
-	if c.cached != nil && time.Now().Before(c.cachedUntil) {
-		cached := c.cached
-		c.mu.Unlock()
-		level.Debug(c.logger).Log("msg", "Using cached WakaTime stats", "range", c.rangeName)
-		return cached, nil
-	}
-	c.mu.Unlock()
-
-	return singleflightDo(&c.flights, "stats", func() (*wakatimeStatsData, error) {
+	return c.cache.getWithTTL("stats", func() (*wakatimeStatsData, time.Duration, error) {
 		body, fetchErr := c.fetchStat(c.uri, statsEndpoint+"/"+c.rangeName, url.Values{})
 		if fetchErr != nil {
-			return nil, fetchErr
+			return nil, 0, fetchErr
 		}
 		defer body.Close()
 
 		var stats wakatimeStats
 		if err := ReadAndUnmarshal(body, &stats); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		data := &stats.Data
+		ttl := c.cacheTTL
+		if !data.IsUpToDate {
+			ttl = time.Minute
+		}
+
 		level.Info(c.logger).Log(
 			"msg", "Collecting stats from Wakatime",
 			"range", c.rangeName,
@@ -360,16 +352,7 @@ func (c *statsCollector) getStats() (*wakatimeStatsData, error) {
 			"languages", len(data.Languages),
 		)
 
-		c.mu.Lock()
-		c.cached = data
-		if data.IsUpToDate {
-			c.cachedUntil = time.Now().Add(c.cacheTTL)
-		} else {
-			c.cachedUntil = time.Now().Add(time.Minute)
-		}
-		c.mu.Unlock()
-
-		return data, nil
+		return data, ttl, nil
 	})
 }
 
@@ -396,7 +379,7 @@ func (c *statsCollector) emit(ch chan<- prometheus.Metric, data *wakatimeStatsDa
 	metric(c.timeoutMinutes, float64(data.Timeout), r)
 	metric(c.writesOnly, boolToFloat(data.WritesOnly), r)
 
-	projects := trimProjects(data.Projects, c.top, c.minSeconds, c.filter)
+	projects := trimStats(data.Projects, "project", func(entry wakatimeStatsProject) string { return entry.Name }, func(entry wakatimeStatsProject) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter)
 	for _, entry := range projects {
 		metric(c.project, entry.TotalSeconds, r, entry.Name)
 		if entry.AIInputTokens != 0 || entry.AIOutputTokens != 0 ||
@@ -417,22 +400,22 @@ func (c *statsCollector) emit(ch chan<- prometheus.Metric, data *wakatimeStatsDa
 			metric(c.projectAIPromptEvents, float64(entry.AIPromptEvents), r, entry.Name)
 		}
 	}
-	for _, entry := range trimEntries(data.Languages, "language", c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimStats(data.Languages, "language", func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.language, entry.TotalSeconds, r, entry.Name)
 	}
-	for _, entry := range trimEntries(data.Editors, "editor", c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimStats(data.Editors, "editor", func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.editor, entry.TotalSeconds, r, entry.Name)
 	}
-	for _, entry := range trimEntries(data.Categories, "category", c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimStats(data.Categories, "category", func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.category, entry.TotalSeconds, r, entry.Name)
 	}
-	for _, entry := range trimEntries(data.OperatingSystems, "os", c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimStats(data.OperatingSystems, "os", func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.operatingSystem, entry.TotalSeconds, r, entry.Name)
 	}
-	for _, entry := range trimMachines(data.Machines, c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimStats(data.Machines, "machine", func(entry wakatimeStatsMachine) string { return entry.Name }, func(entry wakatimeStatsMachine) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.machine, entry.TotalSeconds, r, entry.MachineNameID, entry.Name)
 	}
-	for _, entry := range trimEntries(data.Dependencies, "dependency", c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimStats(data.Dependencies, "dependency", func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.dependency, entry.TotalSeconds, r, entry.Name)
 	}
 
@@ -483,74 +466,26 @@ func sortedCostModels(costs map[string]float64) []string {
 	return models
 }
 
-func trimEntries(entries []wakatimeStatsEntry, dimension string, top int, minSeconds float64, filter *nameFilter) []wakatimeStatsEntry {
-	out := make([]wakatimeStatsEntry, 0, len(entries))
-	for _, entry := range entries {
-		if !filter.Match(dimensionValue(dimension, entry.Name)) {
+func trimStats[T any](items []T, dimension string, name func(T) string, seconds func(T) float64, top int, minSeconds float64, filter *nameFilter) []T {
+	out := make([]T, 0, len(items))
+	for _, item := range items {
+		if !filter.Match(dimensionValue(dimension, name(item))) {
 			continue
 		}
-		out = append(out, entry)
+		out = append(out, item)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
-		return out[i].TotalSeconds > out[j].TotalSeconds
+		left, right := seconds(out[i]), seconds(out[j])
+		if left == right {
+			return name(out[i]) < name(out[j])
+		}
+		return left > right
 	})
 	if minSeconds > 0 {
 		filtered := out[:0]
-		for _, entry := range out {
-			if entry.TotalSeconds >= minSeconds {
-				filtered = append(filtered, entry)
-			}
-		}
-		out = filtered
-	}
-	if top > 0 && len(out) > top {
-		out = out[:top]
-	}
-	return out
-}
-
-func trimProjects(projects []wakatimeStatsProject, top int, minSeconds float64, filter *nameFilter) []wakatimeStatsProject {
-	out := make([]wakatimeStatsProject, 0, len(projects))
-	for _, project := range projects {
-		if !filter.Match(dimensionValue("project", project.Name)) {
-			continue
-		}
-		out = append(out, project)
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		return out[i].TotalSeconds > out[j].TotalSeconds
-	})
-	if minSeconds > 0 {
-		filtered := out[:0]
-		for _, project := range out {
-			if project.TotalSeconds >= minSeconds {
-				filtered = append(filtered, project)
-			}
-		}
-		out = filtered
-	}
-	if top > 0 && len(out) > top {
-		out = out[:top]
-	}
-	return out
-}
-
-func trimMachines(machines []wakatimeStatsMachine, top int, minSeconds float64, filter *nameFilter) []wakatimeStatsMachine {
-	out := make([]wakatimeStatsMachine, 0, len(machines))
-	for _, machine := range machines {
-		if !filter.Match(dimensionValue("machine", machine.Name)) {
-			continue
-		}
-		out = append(out, machine)
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		return out[i].TotalSeconds > out[j].TotalSeconds
-	})
-	if minSeconds > 0 {
-		filtered := out[:0]
-		for _, machine := range out {
-			if machine.TotalSeconds >= minSeconds {
-				filtered = append(filtered, machine)
+		for _, item := range out {
+			if seconds(item) >= minSeconds {
+				filtered = append(filtered, item)
 			}
 		}
 		out = filtered

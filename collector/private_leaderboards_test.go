@@ -71,3 +71,16 @@ func TestPrivateLeaderboardsCollector(t *testing.T) {
 	assertGaugeSample(t, samples, "wakatime_private_leaderboards_available", 1, nil)
 	assertGaugeSample(t, samples, "wakatime_private_leaderboards_total", 1, nil)
 }
+
+func TestValidBoardID(t *testing.T) {
+	for _, id := range []string{"b1", "123e4567-e89b-12d3-a456-426614174000", "board_1", "board.1"} {
+		if !validBoardID(id) {
+			t.Fatalf("%q should be valid", id)
+		}
+	}
+	for _, id := range []string{"", ".", "..", "a/b", "a b", "../x"} {
+		if validBoardID(id) {
+			t.Fatalf("%q should be invalid", id)
+		}
+	}
+}

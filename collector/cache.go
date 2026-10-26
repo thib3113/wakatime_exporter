@@ -20,32 +20,53 @@ import (
 	"time"
 )
 
-type ttlCache[T any] struct {
+type keyedTTLCache[T any] struct {
 	mu      sync.Mutex
-	value   *T
-	until   time.Time
+	entries map[string]keyedCacheEntry[T]
 	flights flightGroup
 }
 
-func (c *ttlCache[T]) get(ttl time.Duration, fetch func() (*T, error)) (*T, error) {
+type keyedCacheEntry[T any] struct {
+	value *T
+	until time.Time
+}
+
+func (c *keyedTTLCache[T]) get(key string, ttl time.Duration, fetch func() (*T, error)) (*T, error) {
+	return c.getWithTTL(key, func() (*T, time.Duration, error) {
+		value, err := fetch()
+		return value, ttl, err
+	})
+}
+
+func (c *keyedTTLCache[T]) getWithTTL(key string, fetch func() (*T, time.Duration, error)) (*T, error) {
 	c.mu.Lock()
-	if c.value != nil && time.Now().Before(c.until) {
-		value := c.value
+	if entry, ok := c.entries[key]; ok && time.Now().Before(entry.until) {
+		value := entry.value
 		c.mu.Unlock()
 		return value, nil
 	}
 	c.mu.Unlock()
 
-	return singleflightDo(&c.flights, "value", func() (*T, error) {
-		value, err := fetch()
+	return singleflightDo(&c.flights, key, func() (*T, error) {
+		value, ttl, err := fetch()
 		if err != nil {
 			return nil, err
 		}
 
 		c.mu.Lock()
-		c.value = value
-		c.until = time.Now().Add(ttl)
+		if c.entries == nil {
+			c.entries = map[string]keyedCacheEntry[T]{}
+		}
+		c.entries[key] = keyedCacheEntry[T]{value: value, until: time.Now().Add(ttl)}
 		c.mu.Unlock()
 		return value, nil
 	})
+}
+
+type ttlCache[T any] struct {
+	cache keyedTTLCache[T]
+}
+
+func (c *ttlCache[T]) get(ttl time.Duration, fetch func() (*T, error)) (*T, error) {
+	return c.cache.get("value", ttl, fetch)
 }

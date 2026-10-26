@@ -18,17 +18,30 @@ package collector
 import (
 	"strconv"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-func parseUnixSeconds(value string) float64 {
+func parseUnixSeconds(value string) (float64, bool) {
 	if value == "" {
-		return 0
+		return 0, false
 	}
 	parsed, err := time.Parse(time.RFC3339Nano, value)
 	if err != nil {
-		return 0
+		return 0, false
 	}
-	return float64(parsed.Unix())
+	return float64(parsed.Unix()), true
+}
+
+func parseUnixSecondsOrZero(value string) float64 {
+	seconds, _ := parseUnixSeconds(value)
+	return seconds
+}
+
+func emitTimestamp(ch chan<- prometheus.Metric, desc *prometheus.Desc, value string, labels ...string) {
+	if seconds, ok := parseUnixSeconds(value); ok {
+		ch <- prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, seconds, labels...)
+	}
 }
 
 func boolLabel(value bool) string {

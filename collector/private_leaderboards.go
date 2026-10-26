@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -32,11 +33,18 @@ const (
 	privateLeaderboardsEndpoint      = "leaderboards"
 )
 
-var privateLeaderboardTypes = map[string]bool{
-	"time":   true,
-	"manual": true,
-	"ai":     true,
-	"spend":  true,
+var (
+	privateLeaderboardTypes = map[string]bool{
+		"time":   true,
+		"manual": true,
+		"ai":     true,
+		"spend":  true,
+	}
+	boardIDPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+)
+
+func validBoardID(id string) bool {
+	return id != "." && id != ".." && boardIDPattern.MatchString(id)
 }
 
 type privateLeaderboardsCollector struct {
@@ -160,26 +168,24 @@ func (c *privateLeaderboardsCollector) Update(ch chan<- prometheus.Metric) error
 }
 
 func (c *privateLeaderboardsCollector) fetchSnapshot() (*privateLeaderboardSnapshot, error) {
-	boards := make([]wakatimePrivateLeaderboard, 0)
-	for page := 1; page <= c.maxPages; page++ {
+	boards, err := paginate(c.maxPages, func(page int) ([]wakatimePrivateLeaderboard, int, error) {
 		params := url.Values{}
 		params.Set("page", strconv.Itoa(page))
 
-		body, err := c.fetchStat(c.uri, privateLeaderboardsEndpoint, params)
-		if err != nil {
-			return nil, err
+		body, fetchErr := c.fetchStat(c.uri, privateLeaderboardsEndpoint, params)
+		if fetchErr != nil {
+			return nil, 0, fetchErr
 		}
 		var boardsResponse wakatimePrivateLeaderboards
 		unmarshalErr := ReadAndUnmarshal(body, &boardsResponse)
 		body.Close()
 		if unmarshalErr != nil {
-			return nil, unmarshalErr
+			return nil, 0, unmarshalErr
 		}
-
-		boards = append(boards, boardsResponse.Data...)
-		if boardsResponse.TotalPages == 0 || page >= boardsResponse.TotalPages {
-			break
-		}
+		return boardsResponse.Data, boardsResponse.TotalPages, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	allowed := map[string]bool{}
@@ -196,31 +202,35 @@ func (c *privateLeaderboardsCollector) fetchSnapshot() (*privateLeaderboardSnaps
 		if len(allowed) > 0 && !allowed[board.ID] {
 			continue
 		}
+		if !validBoardID(board.ID) {
+			level.Warn(c.logger).Log("msg", "Invalid private leaderboard id", "id", board.ID)
+			continue
+		}
 		snapshot.Boards = append(snapshot.Boards, board)
 		snapshot.Leaders[board.ID] = map[string][]wakatimePrivateLeaderboardLeader{}
 
 		for _, boardType := range c.types {
-			for page := 1; page <= c.maxPages; page++ {
+			leaders, err := paginate(c.maxPages, func(page int) ([]wakatimePrivateLeaderboardLeader, int, error) {
 				params := url.Values{}
 				params.Set("board_type", boardType)
 				params.Set("page", strconv.Itoa(page))
 
 				leadersBody, fetchErr := c.fetchStat(c.uri, privateLeaderboardsEndpoint+"/"+board.ID, params)
 				if fetchErr != nil {
-					return nil, fetchErr
+					return nil, 0, fetchErr
 				}
 				var leadersResponse wakatimePrivateLeaderboardLeaders
 				unmarshalErr := ReadAndUnmarshal(leadersBody, &leadersResponse)
 				leadersBody.Close()
 				if unmarshalErr != nil {
-					return nil, unmarshalErr
+					return nil, 0, unmarshalErr
 				}
-
-				snapshot.Leaders[board.ID][boardType] = append(snapshot.Leaders[board.ID][boardType], leadersResponse.Data...)
-				if leadersResponse.TotalPages == 0 || page >= leadersResponse.TotalPages {
-					break
-				}
+				return leadersResponse.Data, leadersResponse.TotalPages, nil
+			})
+			if err != nil {
+				return nil, err
 			}
+			snapshot.Leaders[board.ID][boardType] = leaders
 		}
 	}
 
