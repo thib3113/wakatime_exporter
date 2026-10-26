@@ -19,34 +19,44 @@ package collector
 // See https://wakatime.com/developers#durations
 // Requires OAuth scope: read_heartbeats.
 type wakatimeDurations struct {
-	Data []wakatimeDurationEntry `json:"data"`
-	Start string `json:"start"`
-	End string `json:"end"`
-	Timezone string `json:"timezone"`
+	Data     []wakatimeDurationEntry `json:"data"`
+	Start    string                  `json:"start"`
+	End      string                  `json:"end"`
+	Timezone string                  `json:"timezone"`
 }
 
 type wakatimeDurationEntry struct {
-	Project string `json:"project"`
-	Time float64 `json:"time"`
-	Duration float64 `json:"duration"`
+	Project         string  `json:"project"`
+	Entity          string  `json:"entity"`
+	Language        string  `json:"language"`
+	Dependencies    string  `json:"dependencies"`
+	OS              string  `json:"os"`
+	OperatingSystem string  `json:"operating_system"`
+	Editor          string  `json:"editor"`
+	Category        string  `json:"category"`
+	Machine         string  `json:"machine"`
+	MachineName     string  `json:"machine_name"`
+	MachineNameID   string  `json:"machine_name_id"`
+	Time            float64 `json:"time"`
+	Duration        float64 `json:"duration"`
 
-	AIAdditions int64 `json:"ai_additions"`
-	AIDeletions int64 `json:"ai_deletions"`
+	AIAdditions    int64 `json:"ai_additions"`
+	AIDeletions    int64 `json:"ai_deletions"`
 	HumanAdditions int64 `json:"human_additions"`
 	HumanDeletions int64 `json:"human_deletions"`
 
-	AIInputTokens int64 `json:"ai_input_tokens"`
+	AIInputTokens  int64 `json:"ai_input_tokens"`
 	AIOutputTokens int64 `json:"ai_output_tokens"`
 
 	AIModelCosts map[string]float64 `json:"ai_model_costs"`
 
-	AISessions int64 `json:"ai_sessions"`
-	AIPromptEventsTotal int64 `json:"ai_prompt_events_total"`
-	AIPromptEventsAvgPerSession float64 `json:"ai_prompt_events_avg_per_session"`
+	AISessions                     int64   `json:"ai_sessions"`
+	AIPromptEventsTotal            int64   `json:"ai_prompt_events_total"`
+	AIPromptEventsAvgPerSession    float64 `json:"ai_prompt_events_avg_per_session"`
 	AIPromptEventsMedianPerSession float64 `json:"ai_prompt_events_median_per_session"`
 
-	AIPromptLengthAvg float64 `json:"ai_prompt_length_avg"`
-	AIPromptLengthAvgPerSession float64 `json:"ai_prompt_length_avg_per_session"`
+	AIPromptLengthAvg              float64 `json:"ai_prompt_length_avg"`
+	AIPromptLengthAvgPerSession    float64 `json:"ai_prompt_length_avg_per_session"`
 	AIPromptLengthMedianPerSession float64 `json:"ai_prompt_length_median_per_session"`
-	AIPromptLengthSum float64 `json:"ai_prompt_length_sum"`
+	AIPromptLengthSum              float64 `json:"ai_prompt_length_sum"`
 }

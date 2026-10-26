@@ -78,13 +78,12 @@ func (c *goalCollector) Update(ch chan<- prometheus.Metric) error {
 	if fetchErr != nil {
 		return fetchErr
 	}
+	defer body.Close()
 
 	goalStats := wakatimeGoal{}
 	if err := ReadAndUnmarshal(body, &goalStats); err != nil {
 		return err
 	}
-
-	defer body.Close()
 
 	level.Info(c.logger).Log(
 		"msg", "Collecting goals from Wakatime",
@@ -92,6 +91,10 @@ func (c *goalCollector) Update(ch chan<- prometheus.Metric) error {
 		"pages", goalStats.TotalPages,
 	)
 	for i, data := range goalStats.Data {
+		if len(data.ChartData) == 0 {
+			level.Warn(c.logger).Log("msg", "goal has no chart data", "id", data.ID)
+			continue
+		}
 		// the last element should be the most recent data
 		currentChartData := data.ChartData[len(data.ChartData)-1]
 

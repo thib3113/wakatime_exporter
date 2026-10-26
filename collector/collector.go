@@ -25,10 +25,10 @@ import (
 	"sync"
 	"time"
 
+	kingpin "github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
-	kingpin "github.com/alecthomas/kingpin/v2"
 )
 
 var (
@@ -65,6 +65,7 @@ type CommonInputs struct {
 	AuthMode  string
 	SSLVerify bool
 	Timeout   time.Duration
+	Config    Config
 }
 
 func registerCollector(collector string, isDefaultEnabled bool, factory func(in CommonInputs, logger log.Logger) (Collector, error)) {
@@ -131,15 +132,17 @@ func NewWakaCollector(in CommonInputs, logger log.Logger, filters ...string) (*W
 	}
 	collectors := make(map[string]Collector)
 	for key, enabled := range collectorState {
-		if *enabled {
-			collector, err := factories[key](in, log.With(logger, "collector", key))
-			if err != nil {
-				return nil, err
-			}
-			if len(f) == 0 || f[key] {
-				collectors[key] = collector
-			}
+		if !*enabled {
+			continue
 		}
+		if len(f) > 0 && !f[key] {
+			continue
+		}
+		collector, err := factories[key](in, log.With(logger, "collector", key))
+		if err != nil {
+			return nil, err
+		}
+		collectors[key] = collector
 	}
 	return &WakaCollector{Collectors: collectors, logger: logger}, nil
 }
@@ -172,10 +175,11 @@ func execute(name string, c Collector, ch chan<- prometheus.Metric, logger log.L
 	if err != nil {
 		if isNoDataError(err) {
 			level.Debug(logger).Log("msg", "collector returned no data", "name", name, "duration_seconds", duration.Seconds(), "err", err)
+			success = 1
 		} else {
 			level.Error(logger).Log("msg", "collector failed", "name", name, "duration_seconds", duration.Seconds(), "err", err)
+			success = 0
 		}
-		success = 0
 	} else {
 		level.Debug(logger).Log("msg", "collector succeeded", "name", name, "duration_seconds", duration.Seconds())
 		success = 1

@@ -20,14 +20,19 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
+	"sync"
+	"time"
 
-	"github.com/thib3113/wakatime_exporter/collector"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/thib3113/wakatime_exporter/collector"
 )
+
+const maxFilteredHandlers = 32
 
 // handler wraps an unfiltered http.Handler but uses a filtered handler,
 // created on the fly, if filtering is requested. Create instances with
@@ -40,6 +45,9 @@ type handler struct {
 	includeExporterMetrics  bool
 	commonInputs            collector.CommonInputs
 	logger                  log.Logger
+
+	mu               sync.Mutex
+	filteredHandlers map[string]http.Handler
 }
 
 func newHandler(commonInputs collector.CommonInputs, includeExporterMetrics bool, logger log.Logger) *handler {
@@ -48,6 +56,7 @@ func newHandler(commonInputs collector.CommonInputs, includeExporterMetrics bool
 		includeExporterMetrics:  includeExporterMetrics,
 		commonInputs:            commonInputs,
 		logger:                  logger,
+		filteredHandlers:        map[string]http.Handler{},
 	}
 	if h.includeExporterMetrics {
 		h.exporterMetricsRegistry.MustRegister(
@@ -73,15 +82,51 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.unfilteredHandler.ServeHTTP(w, r)
 		return
 	}
-	// To serve filtered metrics, we create a filtering handler on the fly.
-	filteredHandler, err := h.innerHandler(filters...)
-	if err != nil {
-		level.Warn(h.logger).Log("msg", "Couldn't create filtered metrics handler:", "err", err)
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(fmt.Sprintf("Couldn't create filtered metrics handler: %s", err)))
+	// To serve filtered metrics, reuse the handler for this filter set so
+	// collector caches (stats, insights, ...) survive across scrapes.
+	key := filterKey(filters)
+	h.mu.Lock()
+	filteredHandler, ok := h.filteredHandlers[key]
+	if !ok && len(h.filteredHandlers) >= maxFilteredHandlers {
+		h.mu.Unlock()
+		level.Warn(h.logger).Log("msg", "Too many collector filter combinations", "max", maxFilteredHandlers)
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte("too many collector filter combinations\n"))
 		return
 	}
+	if !ok {
+		var err error
+		filteredHandler, err = h.innerHandler(filters...)
+		if err != nil {
+			h.mu.Unlock()
+			level.Warn(h.logger).Log("msg", "Couldn't create filtered metrics handler:", "err", err)
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(fmt.Sprintf("Couldn't create filtered metrics handler: %s", err)))
+			return
+		}
+		h.filteredHandlers[key] = filteredHandler
+	}
+	h.mu.Unlock()
+
 	filteredHandler.ServeHTTP(w, r)
+}
+
+func filterKey(filters []string) string {
+	seen := make(map[string]struct{}, len(filters))
+	unique := make([]string, 0, len(filters))
+	for _, filter := range filters {
+		if _, ok := seen[filter]; ok {
+			continue
+		}
+		seen[filter] = struct{}{}
+		unique = append(unique, filter)
+	}
+	sort.Strings(unique)
+	var builder strings.Builder
+	for _, filter := range unique {
+		fmt.Fprintf(&builder, "%d:%s", len(filter), filter)
+	}
+	return builder.String()
 }
 
 // innerHandler is used to create both the one unfiltered http.Handler to be
@@ -110,17 +155,22 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 	}
 
 	r := prometheus.NewRegistry()
-	r.MustRegister(collectors.NewBuildInfoCollector())
+	if h.includeExporterMetrics {
+		r.MustRegister(collectors.NewBuildInfoCollector())
+	}
 	if err := r.Register(nc); err != nil {
 		return nil, fmt.Errorf("couldn't register collector: %s", err)
 	}
-	handler := promhttp.HandlerFor(
-		prometheus.Gatherers{h.exporterMetricsRegistry, r},
-		promhttp.HandlerOpts{
-			ErrorHandling: promhttp.ContinueOnError,
-			Registry:      h.exporterMetricsRegistry,
-		},
-	)
+	gatherers := prometheus.Gatherers{r}
+	opts := promhttp.HandlerOpts{
+		ErrorHandling: promhttp.ContinueOnError,
+		Timeout:       30 * time.Second,
+	}
+	if h.includeExporterMetrics {
+		gatherers = prometheus.Gatherers{h.exporterMetricsRegistry, r}
+		opts.Registry = h.exporterMetricsRegistry
+	}
+	handler := promhttp.HandlerFor(gatherers, opts)
 	if h.includeExporterMetrics {
 		// Note that we have to use h.exporterMetricsRegistry here to
 		// use the same promhttp metrics for all expositions.

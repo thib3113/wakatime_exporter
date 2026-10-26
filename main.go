@@ -21,11 +21,12 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
 	"github.com/prometheus/common/version"
-	"github.com/alecthomas/kingpin/v2"
 
 	"github.com/thib3113/wakatime_exporter/collector"
 )
@@ -61,6 +62,27 @@ func UserPath(uri *url.URL, user string) url.URL {
 
 	userURL.Path = userPath
 	return userURL
+}
+
+func splitCSV(value string) []string {
+	if value == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if _, ok := seen[part]; ok {
+			continue
+		}
+		seen[part] = struct{}{}
+		out = append(out, part)
+	}
+	return out
 }
 
 func main() {
@@ -114,15 +136,200 @@ func main() {
 			"wakatime.ssl-verify",
 			"Flag that enables SSL certificate verification for the scrape URI.",
 		).Default("true").Envar("WAKA_SSL_VERIFY").Bool()
+
+		statsRange = kingpin.Flag(
+			"stats.range",
+			"Time range for the stats collector (all_time, last_7_days, last_30_days, last_6_months, last_year, YYYY, or YYYY-MM).",
+		).Default("all_time").Envar("WAKA_STATS_RANGE").String()
+
+		statsCacheTTL = kingpin.Flag(
+			"stats.cache-ttl",
+			"How long to cache the stats response between scrapes.",
+		).Default("1h").Envar("WAKA_STATS_CACHE_TTL").Duration()
+
+		statsTop = kingpin.Flag(
+			"stats.top",
+			"Keep at most N entries per stats dimension (0 = all).",
+		).Default("50").Envar("WAKA_STATS_TOP").Int()
+
+		statsMinSeconds = kingpin.Flag(
+			"stats.min-seconds",
+			"Drop stats entries below this many seconds (0 = keep all).",
+		).Default("60").Envar("WAKA_STATS_MIN_SECONDS").Float64()
+
+		aiBreakdown = kingpin.Flag(
+			"ai.breakdown",
+			"Comma-separated durations slice_by dimensions for AI breakdown metrics (language, editor, os, category, machine, project, entity, dependencies).",
+		).Default("language").Envar("WAKA_AI_BREAKDOWN").String()
+
+		aiTop = kingpin.Flag(
+			"ai.top",
+			"Keep at most N entries per AI breakdown dimension (0 = all).",
+		).Default("50").Envar("WAKA_AI_TOP").Int()
+
+		aiMinTokens = kingpin.Flag(
+			"ai.min-tokens",
+			"Drop AI breakdown entries below this many total tokens (0 = keep all).",
+		).Default("1000").Envar("WAKA_AI_MIN_TOKENS").Int64()
+
+		aiCacheTTL = kingpin.Flag(
+			"ai.cache-ttl",
+			"How long to cache AI breakdown responses between scrapes.",
+		).Default("15m").Envar("WAKA_AI_CACHE_TTL").Duration()
+
+		insightsTypes = kingpin.Flag(
+			"insights.types",
+			"Comma-separated insight types (weekdays, days, ai_days, best_day, daily_average, projects, languages, editors, categories, machines, operating_systems, stats).",
+		).Default("weekdays,best_day,daily_average,ai_days").Envar("WAKA_INSIGHTS_TYPES").String()
+
+		insightsRange = kingpin.Flag(
+			"insights.range",
+			"Time range for insights (all_time, last_7_days, last_30_days, last_6_months, last_year, YYYY, or YYYY-MM).",
+		).Default("all_time").Envar("WAKA_INSIGHTS_RANGE").String()
+
+		insightsCacheTTL = kingpin.Flag(
+			"insights.cache-ttl",
+			"How long to cache insights responses between scrapes.",
+		).Default("1h").Envar("WAKA_INSIGHTS_CACHE_TTL").Duration()
+
+		insightsTop = kingpin.Flag(
+			"insights.top",
+			"Keep at most N entries per insights dimension (0 = all).",
+		).Default("50").Envar("WAKA_INSIGHTS_TOP").Int()
+
+		insightsMinSeconds = kingpin.Flag(
+			"insights.min-seconds",
+			"Drop insights entries below this many seconds (0 = keep all).",
+		).Default("60").Envar("WAKA_INSIGHTS_MIN_SECONDS").Float64()
+
+		inventoryCacheTTL = kingpin.Flag(
+			"inventory.cache-ttl",
+			"How long to cache user agents, projects and machines between scrapes.",
+		).Default("1h").Envar("WAKA_INVENTORY_CACHE_TTL").Duration()
+
+		projectsFilter = kingpin.Flag(
+			"projects.filter",
+			"Only export projects whose name matches this regex (empty = all).",
+		).Default("").Envar("WAKA_PROJECTS_FILTER").String()
+
+		statsInclude = kingpin.Flag(
+			"stats.include",
+			"Regex matched against dimension:name for stats (project:, language:, editor:, category:, os:, machine:, dependency:).",
+		).Default("").Envar("WAKA_STATS_INCLUDE").String()
+
+		statsExclude = kingpin.Flag(
+			"stats.exclude",
+			"Regex matched against dimension:name for stats; matching entries are dropped.",
+		).Default("").Envar("WAKA_STATS_EXCLUDE").String()
+
+		inventoryTop = kingpin.Flag(
+			"inventory.top",
+			"Keep at most N user agents, projects and machines by recency (0 = all).",
+		).Default("0").Envar("WAKA_INVENTORY_TOP").Int()
+
+		inventoryInclude = kingpin.Flag(
+			"inventory.include",
+			"Regex matched against editor:<editor>, project:<name>, machine:<name> for inventory collectors.",
+		).Default("").Envar("WAKA_INVENTORY_INCLUDE").String()
+
+		inventoryExclude = kingpin.Flag(
+			"inventory.exclude",
+			"Regex matched against editor:<editor>, project:<name>, machine:<name>; matching entries are dropped.",
+		).Default("").Envar("WAKA_INVENTORY_EXCLUDE").String()
+
+		aiInclude = kingpin.Flag(
+			"ai.include",
+			"Regex matched against <slice>:<name> for AI breakdown metrics.",
+		).Default("").Envar("WAKA_AI_INCLUDE").String()
+
+		aiExclude = kingpin.Flag(
+			"ai.exclude",
+			"Regex matched against <slice>:<name>; matching AI breakdown entries are dropped.",
+		).Default("").Envar("WAKA_AI_EXCLUDE").String()
+
+		heartbeatsInclude = kingpin.Flag(
+			"heartbeats.include",
+			"Regex matched against project:<name> for heartbeat metrics.",
+		).Default("").Envar("WAKA_HEARTBEATS_INCLUDE").String()
+
+		heartbeatsExclude = kingpin.Flag(
+			"heartbeats.exclude",
+			"Regex matched against project:<name>; matching heartbeat projects are dropped.",
+		).Default("").Envar("WAKA_HEARTBEATS_EXCLUDE").String()
+
+		externalDurationsInclude = kingpin.Flag(
+			"external-durations.include",
+			"Regex matched against project:, provider:, category:, language: for external durations.",
+		).Default("").Envar("WAKA_EXTERNAL_DURATIONS_INCLUDE").String()
+
+		externalDurationsExclude = kingpin.Flag(
+			"external-durations.exclude",
+			"Regex matched against project:, provider:, category:, language:; matching entries are dropped.",
+		).Default("").Envar("WAKA_EXTERNAL_DURATIONS_EXCLUDE").String()
+
+		externalDurationsDate = kingpin.Flag(
+			"external-durations.date",
+			"Date for the external durations collector (today, yesterday, or YYYY-MM-DD).",
+		).Default("today").Envar("WAKA_EXTERNAL_DURATIONS_DATE").String()
+
+		externalDurationsCacheTTL = kingpin.Flag(
+			"external-durations.cache-ttl",
+			"How long to cache external durations between scrapes.",
+		).Default("15m").Envar("WAKA_EXTERNAL_DURATIONS_CACHE_TTL").Duration()
+
+		privateLeaderboardsBoards = kingpin.Flag(
+			"private-leaderboards.boards",
+			"Comma-separated private leaderboard IDs (empty = all).",
+		).Default("").Envar("WAKA_PRIVATE_LEADERBOARDS_BOARDS").String()
+
+		privateLeaderboardsTypes = kingpin.Flag(
+			"private-leaderboards.types",
+			"Comma-separated leaderboard types (time, manual, ai, spend).",
+		).Default("time,ai,spend").Envar("WAKA_PRIVATE_LEADERBOARDS_TYPES").String()
+
+		privateLeaderboardsMaxPages = kingpin.Flag(
+			"private-leaderboards.max-pages",
+			"Maximum number of pages to fetch per leaderboard (1 = first page only).",
+		).Default("1").Envar("WAKA_PRIVATE_LEADERBOARDS_MAX_PAGES").Int()
+
+		privateLeaderboardsCacheTTL = kingpin.Flag(
+			"private-leaderboards.cache-ttl",
+			"How long to cache private leaderboards between scrapes.",
+		).Default("1h").Envar("WAKA_PRIVATE_LEADERBOARDS_CACHE_TTL").Duration()
+
+		orgsIDs = kingpin.Flag(
+			"orgs.ids",
+			"Comma-separated organization IDs (empty = all).",
+		).Default("").Envar("WAKA_ORGS_IDS").String()
+
+		orgsCacheTTL = kingpin.Flag(
+			"orgs.cache-ttl",
+			"How long to cache organizations between scrapes.",
+		).Default("1h").Envar("WAKA_ORGS_CACHE_TTL").Duration()
+
+		heartbeatsTop = kingpin.Flag(
+			"heartbeats.top",
+			"Keep at most N heartbeats projects (0 = all).",
+		).Default("50").Envar("WAKA_HEARTBEATS_TOP").Int()
+
+		heartbeatsMinCount = kingpin.Flag(
+			"heartbeats.min-count",
+			"Drop heartbeat projects below this many heartbeats (0 = keep all).",
+		).Default("1").Envar("WAKA_HEARTBEATS_MIN_COUNT").Int()
+
+		heartbeatsCacheTTL = kingpin.Flag(
+			"heartbeats.cache-ttl",
+			"How long to cache heartbeats between scrapes.",
+		).Default("15m").Envar("WAKA_HEARTBEATS_CACHE_TTL").Duration()
 		logLevel = kingpin.Flag(
 			"log.level",
 			"Only log messages with the given severity or above. One of: [debug, info, warn, error]",
-		).Default("info").Enum("debug", "info", "warn", "error")
+		).Default("info").Envar("WAKA_LOG_LEVEL").Enum("debug", "info", "warn", "error")
 
 		logFormat = kingpin.Flag(
 			"log.format",
 			"Output format of log messages. One of: [logfmt, json]",
-		).Default("logfmt").Enum("logfmt", "json")
+		).Default("logfmt").Envar("WAKA_LOG_FORMAT").Enum("logfmt", "json")
 	)
 
 	kingpin.Version(version.Print("wakatime_exporter"))
@@ -150,6 +357,56 @@ func main() {
 		AuthMode:  *wakaAuthMode,
 		SSLVerify: *wakaSSLVerify,
 		Timeout:   *wakaTimeout,
+		Config: collector.Config{
+			Stats: collector.StatsConfig{
+				Range:      *statsRange,
+				CacheTTL:   *statsCacheTTL,
+				Top:        *statsTop,
+				MinSeconds: *statsMinSeconds,
+				Filter:     collector.FilterConfig{Include: *statsInclude, Exclude: *statsExclude},
+			},
+			AI: collector.AIBreakdownConfig{
+				Dimensions: splitCSV(*aiBreakdown),
+				Top:        *aiTop,
+				MinTokens:  *aiMinTokens,
+				CacheTTL:   *aiCacheTTL,
+				Filter:     collector.FilterConfig{Include: *aiInclude, Exclude: *aiExclude},
+			},
+			Insights: collector.InsightsConfig{
+				Types:      splitCSV(*insightsTypes),
+				Range:      *insightsRange,
+				CacheTTL:   *insightsCacheTTL,
+				Top:        *insightsTop,
+				MinSeconds: *insightsMinSeconds,
+			},
+			Inventory: collector.InventoryConfig{
+				Top:            *inventoryTop,
+				Filter:         collector.FilterConfig{Include: *inventoryInclude, Exclude: *inventoryExclude},
+				ProjectsFilter: *projectsFilter,
+				CacheTTL:       *inventoryCacheTTL,
+			},
+			ExternalDurations: collector.ExternalDurationsConfig{
+				Date:     *externalDurationsDate,
+				CacheTTL: *externalDurationsCacheTTL,
+				Filter:   collector.FilterConfig{Include: *externalDurationsInclude, Exclude: *externalDurationsExclude},
+			},
+			PrivateLeaderboards: collector.PrivateLeaderboardsConfig{
+				Boards:   splitCSV(*privateLeaderboardsBoards),
+				Types:    splitCSV(*privateLeaderboardsTypes),
+				MaxPages: *privateLeaderboardsMaxPages,
+				CacheTTL: *privateLeaderboardsCacheTTL,
+			},
+			Orgs: collector.OrgsConfig{
+				IDs:      splitCSV(*orgsIDs),
+				CacheTTL: *orgsCacheTTL,
+			},
+			Heartbeats: collector.HeartbeatsConfig{
+				Top:      *heartbeatsTop,
+				MinCount: *heartbeatsMinCount,
+				CacheTTL: *heartbeatsCacheTTL,
+				Filter:   collector.FilterConfig{Include: *heartbeatsInclude, Exclude: *heartbeatsExclude},
+			},
+		},
 	}, !*disableExporterMetrics, logger))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
@@ -162,7 +419,14 @@ func main() {
 	})
 
 	level.Info(logger).Log("msg", "Listening on", "address", *listenAddress)
-	if err := http.ListenAndServe(*listenAddress, nil); err != nil {
+	server := &http.Server{
+		Addr:              *listenAddress,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil {
 		level.Error(logger).Log("msg", "Error starting HTTP server", "err", err)
 		os.Exit(1)
 	}

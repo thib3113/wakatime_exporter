@@ -64,13 +64,12 @@ func (c *alltimeCollector) Update(ch chan<- prometheus.Metric) error {
 	if fetchErr != nil {
 		return fetchErr
 	}
+	defer body.Close()
 
 	alltimeStats := wakatimeAlltime{}
 	if err := ReadAndUnmarshal(body, &alltimeStats); err != nil {
 		return err
 	}
-
-	defer body.Close()
 
 	level.Info(c.logger).Log(
 		"msg", "Collecting all-time from Wakatime",

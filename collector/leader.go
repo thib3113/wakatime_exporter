@@ -63,13 +63,12 @@ func (c *leaderCollector) Update(ch chan<- prometheus.Metric) error {
 	if fetchErr != nil {
 		return fetchErr
 	}
+	defer body.Close()
 
 	leaderStats := wakatimeLeader{}
 	if err := ReadAndUnmarshal(body, &leaderStats); err != nil {
 		return err
 	}
-
-	defer body.Close()
 
 	level.Info(c.logger).Log(
 		"msg", "Collecting rank from Wakatime",

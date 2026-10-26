@@ -21,11 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -72,6 +72,13 @@ func AuthorizationHeader(token string, authMode string) string {
 // Namespace defines the common namespace to be used by all metrics.
 const namespace = "wakatime"
 
+const (
+	maxConcurrentAPIRequests = 8
+	maxResponseBytes         = 32 << 20
+)
+
+var apiRequestSlots = make(chan struct{}, maxConcurrentAPIRequests)
+
 // BoolToBinary converts booleans to "0" or "1"
 func BoolToBinary(b bool) string {
 	if b {
@@ -93,7 +100,7 @@ func FetchHTTP(token string, authMode string, sslVerify bool, timeout time.Durat
 		uri.RawQuery = params.Encode()
 		url := uri.String()
 
-		level.Info(logger).Log("msg", "Scraping Wakatime", "path", subPath, "url", url)
+		level.Debug(logger).Log("msg", "Scraping Wakatime", "path", subPath, "url", uri.Redacted())
 
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
@@ -104,30 +111,51 @@ func FetchHTTP(token string, authMode string, sslVerify bool, timeout time.Durat
 			"Authorization": {authHeader},
 		}
 
+		apiRequestSlots <- struct{}{}
 		resp, err := client.Do(req)
 		if err != nil {
+			if resp != nil && resp.Body != nil {
+				resp.Body.Close()
+			}
+			<-apiRequestSlots
 			return nil, err
 		}
 
 		if !(resp.StatusCode >= 200 && resp.StatusCode < 300) {
 			resp.Body.Close()
+			<-apiRequestSlots
 			return nil, fmt.Errorf("HTTP status %d", resp.StatusCode)
 		}
-		return resp.Body, nil
+		return &releasingReadCloser{
+			ReadCloser: resp.Body,
+			release:    func() { <-apiRequestSlots },
+		}, nil
 	}
+}
+
+type releasingReadCloser struct {
+	io.ReadCloser
+	release func()
+	once    sync.Once
+}
+
+func (r *releasingReadCloser) Close() error {
+	err := r.ReadCloser.Close()
+	r.once.Do(r.release)
+	return err
 }
 
 // ReadAndUnmarshal reads the JSON response body and unmarshals the response
 func ReadAndUnmarshal(body io.ReadCloser, object interface{}) error {
-	respBody, readErr := ioutil.ReadAll(body)
-
+	respBody, readErr := io.ReadAll(io.LimitReader(body, maxResponseBytes+1))
 	if readErr != nil {
 		return readErr
 	}
+	if len(respBody) > maxResponseBytes {
+		return fmt.Errorf("response exceeds %d bytes", maxResponseBytes)
+	}
 
-	var jsonErr error
-	jsonErr = json.Unmarshal(respBody, &object)
-	if jsonErr != nil {
+	if jsonErr := json.Unmarshal(respBody, object); jsonErr != nil {
 		return jsonErr
 	}
 

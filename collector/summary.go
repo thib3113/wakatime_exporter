@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"fmt"
 	"io"
 	"net/url"
 
@@ -101,13 +102,12 @@ func (c *summaryCollector) Update(ch chan<- prometheus.Metric) error {
 	if fetchErr != nil {
 		return fetchErr
 	}
+	defer body.Close()
 
 	summaryStats := wakatimeSummary{}
 	if err := ReadAndUnmarshal(body, &summaryStats); err != nil {
 		return err
 	}
-
-	defer body.Close()
 
 	for i, data := range summaryStats.Data {
 		level.Info(c.logger).Log(
@@ -125,7 +125,7 @@ func (c *summaryCollector) Update(ch chan<- prometheus.Metric) error {
 		return ErrNoData
 	}
 	if resultLength != 1 {
-		level.Error(c.logger).Log("msg", "length of results is incorrect", "size", resultLength)
+		return fmt.Errorf("expected 1 summary, got %d", resultLength)
 	}
 	todaySummaryStats := summaryStats.Data[0]
 

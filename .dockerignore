@@ -1,3 +1,10 @@
 .git/
 .build/
 vendor/
+.env
+.env.*
+*.enc.yaml
+*.pem
+*.key
+kubeconfig*
+secrets/

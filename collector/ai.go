@@ -31,17 +31,17 @@ const (
 )
 
 type aiCollector struct {
-	lines           *prometheus.Desc
-	tokens          *prometheus.Desc
-	costUSD         *prometheus.Desc
-	sessions        *prometheus.Desc
-	promptEvents    *prometheus.Desc
-	promptLengthSum *prometheus.Desc
-	promptLengthAvg *prometheus.Desc
+	lines             *prometheus.Desc
+	tokens            *prometheus.Desc
+	costUSD           *prometheus.Desc
+	sessions          *prometheus.Desc
+	promptEvents      *prometheus.Desc
+	promptLengthSum   *prometheus.Desc
+	promptLengthAvg   *prometheus.Desc
 	secondsPerProject *prometheus.Desc
-	uri             url.URL
-	fetchStat       func(url.URL, string, url.Values) (io.ReadCloser, error)
-	logger          log.Logger
+	uri               url.URL
+	fetchStat         func(url.URL, string, url.Values) (io.ReadCloser, error)
+	logger            log.Logger
 }
 
 func init() {
@@ -64,12 +64,12 @@ func NewAICollector(in CommonInputs, logger log.Logger) (Collector, error) {
 		),
 		costUSD: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, aiSubsystem, "cost_usd_total"),
-			"Estimated AI model cost in USD, from Wakatime durations.",
+			"Estimated AI model cost in USD according to WakaTime pricing.",
 			[]string{"model"}, nil,
 		),
 		sessions: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, aiSubsystem, "sessions_total"),
-			"Total distinct AI sessions, from Wakatime durations.",
+			"Sum of per-duration AI sessions, from Wakatime durations (may double-count overlapping sessions).",
 			nil, nil,
 		),
 		promptEvents: prometheus.NewDesc(
