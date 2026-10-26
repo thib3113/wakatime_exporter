@@ -19,6 +19,7 @@ package collector
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -59,13 +60,14 @@ var (
 
 // CommonInputs are the inputs needed to implement any Collector
 type CommonInputs struct {
-	BaseURI   url.URL
-	URI       url.URL
-	Token     string
-	AuthMode  string
-	SSLVerify bool
-	Timeout   time.Duration
-	Config    Config
+	BaseURI    url.URL
+	URI        url.URL
+	Token      string
+	AuthMode   string
+	SSLVerify  bool
+	Timeout    time.Duration
+	HTTPClient *http.Client
+	Config     Config
 }
 
 func registerCollector(collector string, isDefaultEnabled bool, factory func(in CommonInputs, logger log.Logger) (Collector, error)) {
@@ -192,15 +194,6 @@ func execute(name string, c Collector, ch chan<- prometheus.Metric, logger log.L
 type Collector interface {
 	// Get new metrics and expose them via prometheus registry.
 	Update(ch chan<- prometheus.Metric) error
-}
-
-type typedDesc struct {
-	desc      *prometheus.Desc
-	valueType prometheus.ValueType
-}
-
-func (d *typedDesc) mustNewConstMetric(value float64, labels ...string) prometheus.Metric {
-	return prometheus.MustNewConstMetric(d.desc, d.valueType, value, labels...)
 }
 
 // ErrNoData indicates the collector found no data to collect, but had no other error.

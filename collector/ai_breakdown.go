@@ -57,8 +57,9 @@ type aiBreakdownCollector struct {
 	fetchStat       func(url.URL, string, url.Values) (io.ReadCloser, error)
 	logger          log.Logger
 
-	mu    sync.Mutex
-	cache map[string]aiBreakdownCacheEntry
+	mu      sync.Mutex
+	cache   map[string]aiBreakdownCacheEntry
+	flights flightGroup
 }
 
 type aiBreakdownCacheEntry struct {
@@ -141,7 +142,7 @@ func NewAIBreakdownCollector(in CommonInputs, logger log.Logger) (Collector, err
 		filter:     filter,
 		cacheTTL:   cacheTTL,
 		uri:        in.URI,
-		fetchStat:  FetchHTTP(in.Token, in.AuthMode, in.SSLVerify, in.Timeout, logger),
+		fetchStat:  FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
 		logger:     logger,
 		cache:      map[string]aiBreakdownCacheEntry{},
 	}, nil
@@ -185,26 +186,28 @@ func (c *aiBreakdownCollector) getDurations(dimension string) (*wakatimeDuration
 	}
 	c.mu.Unlock()
 
-	params := url.Values{}
-	params.Add("date", "today")
-	params.Add("slice_by", dimension)
-	params.Add("cache", "false")
+	return singleflightDo(&c.flights, dimension, func() (*wakatimeDurations, error) {
+		params := url.Values{}
+		params.Add("date", "today")
+		params.Add("slice_by", dimension)
+		params.Add("cache", "false")
 
-	body, fetchErr := c.fetchStat(c.uri, aiEndpoint, params)
-	if fetchErr != nil {
-		return nil, fetchErr
-	}
-	defer body.Close()
+		body, fetchErr := c.fetchStat(c.uri, aiEndpoint, params)
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+		defer body.Close()
 
-	var response wakatimeDurations
-	if err := ReadAndUnmarshal(body, &response); err != nil {
-		return nil, err
-	}
+		var response wakatimeDurations
+		if err := ReadAndUnmarshal(body, &response); err != nil {
+			return nil, err
+		}
 
-	c.mu.Lock()
-	c.cache[dimension] = aiBreakdownCacheEntry{data: &response, until: time.Now().Add(c.cacheTTL)}
-	c.mu.Unlock()
-	return &response, nil
+		c.mu.Lock()
+		c.cache[dimension] = aiBreakdownCacheEntry{data: &response, until: time.Now().Add(c.cacheTTL)}
+		c.mu.Unlock()
+		return &response, nil
+	})
 }
 
 func (c *aiBreakdownCollector) emit(ch chan<- prometheus.Metric, dimension string, data *wakatimeDurations) {

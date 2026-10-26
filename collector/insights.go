@@ -67,8 +67,9 @@ type insightsCollector struct {
 	fetchStat      func(url.URL, string, url.Values) (io.ReadCloser, error)
 	logger         log.Logger
 
-	mu    sync.Mutex
-	cache map[string]insightCacheEntry
+	mu      sync.Mutex
+	cache   map[string]insightCacheEntry
+	flights flightGroup
 }
 
 type insightCacheEntry struct {
@@ -95,8 +96,8 @@ func NewInsightsCollector(in CommonInputs, logger log.Logger) (Collector, error)
 	if rangeName == "" {
 		rangeName = defaultInsightsRange
 	}
-	if !statsRangePattern.MatchString(rangeName) {
-		return nil, fmt.Errorf("invalid insights range %q", rangeName)
+	if err := validateRange(rangeName); err != nil {
+		return nil, fmt.Errorf("invalid insights range: %w", err)
 	}
 
 	cacheTTL := in.Config.Insights.CacheTTL
@@ -146,7 +147,7 @@ func NewInsightsCollector(in CommonInputs, logger log.Logger) (Collector, error)
 		top:        in.Config.Insights.Top,
 		minSeconds: in.Config.Insights.MinSeconds,
 		uri:        in.URI,
-		fetchStat:  FetchHTTP(in.Token, in.AuthMode, in.SSLVerify, in.Timeout, logger),
+		fetchStat:  FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
 		logger:     logger,
 		cache:      map[string]insightCacheEntry{},
 	}, nil
@@ -188,26 +189,28 @@ func (c *insightsCollector) getInsight(insightType string) (*wakatimeInsights, e
 	}
 	c.mu.Unlock()
 
-	body, fetchErr := c.fetchStat(c.uri, insightsEndpoint+"/"+insightType+"/"+c.rangeName, url.Values{})
-	if fetchErr != nil {
-		return nil, fetchErr
-	}
-	defer body.Close()
+	return singleflightDo(&c.flights, insightType, func() (*wakatimeInsights, error) {
+		body, fetchErr := c.fetchStat(c.uri, insightsEndpoint+"/"+insightType+"/"+c.rangeName, url.Values{})
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+		defer body.Close()
 
-	var response wakatimeInsights
-	if err := ReadAndUnmarshal(body, &response); err != nil {
-		return nil, err
-	}
+		var response wakatimeInsights
+		if err := ReadAndUnmarshal(body, &response); err != nil {
+			return nil, err
+		}
 
-	cacheTTL := c.cacheTTL
-	if !response.IsUpToDate && !rawBool(response.Data, "is_up_to_date") {
-		cacheTTL = time.Minute
-	}
+		cacheTTL := c.cacheTTL
+		if !response.IsUpToDate && !rawBool(response.Data, "is_up_to_date") {
+			cacheTTL = time.Minute
+		}
 
-	c.mu.Lock()
-	c.cache[insightType] = insightCacheEntry{data: &response, until: time.Now().Add(cacheTTL)}
-	c.mu.Unlock()
-	return &response, nil
+		c.mu.Lock()
+		c.cache[insightType] = insightCacheEntry{data: &response, until: time.Now().Add(cacheTTL)}
+		c.mu.Unlock()
+		return &response, nil
+	})
 }
 
 func (c *insightsCollector) emit(ch chan<- prometheus.Metric, insightType string, data *wakatimeInsights) bool {

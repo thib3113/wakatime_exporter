@@ -53,10 +53,10 @@ func TestProjectsCollector(t *testing.T) {
 
 	samples := collectSamples(t, collector)
 	assertGaugeSample(t, samples, "wakatime_project_info", 1, map[string]string{
-		"name":       "example-project",
-		"id":         "1",
-		"repository": "git@example.com:example.git",
-		"public_url": "true",
+		"name":           "example-project",
+		"id":             "1",
+		"repository":     "git@example.com:example.git",
+		"has_public_url": "true",
 	})
 	assertGaugeSample(t, samples, "wakatime_project_last_heartbeat_timestamp",
 		float64(time.Date(2026, 1, 16, 19, 59, 0, 0, time.UTC).Unix()),

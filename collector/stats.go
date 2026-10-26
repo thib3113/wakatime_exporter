@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"regexp"
 	"sort"
 	"sync"
 	"time"
@@ -36,8 +35,6 @@ const (
 	defaultStatsRange    = "all_time"
 	defaultStatsCacheTTL = time.Hour
 )
-
-var statsRangePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 type statsCollector struct {
 	total                      *prometheus.Desc
@@ -83,6 +80,7 @@ type statsCollector struct {
 	mu          sync.Mutex
 	cached      *wakatimeStatsData
 	cachedUntil time.Time
+	flights     flightGroup
 }
 
 func init() {
@@ -100,8 +98,8 @@ func NewStatsCollector(in CommonInputs, logger log.Logger) (Collector, error) {
 	if rangeName == "" {
 		rangeName = defaultStatsRange
 	}
-	if !statsRangePattern.MatchString(rangeName) {
-		return nil, fmt.Errorf("invalid stats range %q", rangeName)
+	if err := validateRange(rangeName); err != nil {
+		return nil, fmt.Errorf("invalid stats range: %w", err)
 	}
 
 	cacheTTL := in.Config.Stats.CacheTTL
@@ -271,7 +269,7 @@ func NewStatsCollector(in CommonInputs, logger log.Logger) (Collector, error) {
 		minSeconds: in.Config.Stats.MinSeconds,
 		filter:     filter,
 		uri:        in.URI,
-		fetchStat:  FetchHTTP(in.Token, in.AuthMode, in.SSLVerify, in.Timeout, logger),
+		fetchStat:  FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
 		logger:     logger,
 	}, nil
 }
@@ -341,36 +339,38 @@ func (c *statsCollector) getStats() (*wakatimeStatsData, error) {
 	}
 	c.mu.Unlock()
 
-	body, fetchErr := c.fetchStat(c.uri, statsEndpoint+"/"+c.rangeName, url.Values{})
-	if fetchErr != nil {
-		return nil, fetchErr
-	}
-	defer body.Close()
+	return singleflightDo(&c.flights, "stats", func() (*wakatimeStatsData, error) {
+		body, fetchErr := c.fetchStat(c.uri, statsEndpoint+"/"+c.rangeName, url.Values{})
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+		defer body.Close()
 
-	var stats wakatimeStats
-	if err := ReadAndUnmarshal(body, &stats); err != nil {
-		return nil, err
-	}
+		var stats wakatimeStats
+		if err := ReadAndUnmarshal(body, &stats); err != nil {
+			return nil, err
+		}
 
-	data := &stats.Data
-	level.Info(c.logger).Log(
-		"msg", "Collecting stats from Wakatime",
-		"range", c.rangeName,
-		"up_to_date", data.IsUpToDate,
-		"projects", len(data.Projects),
-		"languages", len(data.Languages),
-	)
+		data := &stats.Data
+		level.Info(c.logger).Log(
+			"msg", "Collecting stats from Wakatime",
+			"range", c.rangeName,
+			"up_to_date", data.IsUpToDate,
+			"projects", len(data.Projects),
+			"languages", len(data.Languages),
+		)
 
-	c.mu.Lock()
-	c.cached = data
-	if data.IsUpToDate {
-		c.cachedUntil = time.Now().Add(c.cacheTTL)
-	} else {
-		c.cachedUntil = time.Now().Add(time.Minute)
-	}
-	c.mu.Unlock()
+		c.mu.Lock()
+		c.cached = data
+		if data.IsUpToDate {
+			c.cachedUntil = time.Now().Add(c.cacheTTL)
+		} else {
+			c.cachedUntil = time.Now().Add(time.Minute)
+		}
+		c.mu.Unlock()
 
-	return data, nil
+		return data, nil
+	})
 }
 
 func (c *statsCollector) emit(ch chan<- prometheus.Metric, data *wakatimeStatsData) {

@@ -44,6 +44,17 @@ type externalDurationsCollector struct {
 	logger    log.Logger
 }
 
+func validateExternalDurationsDate(value string) error {
+	switch value {
+	case "today", "yesterday":
+		return nil
+	}
+	if _, err := time.Parse("2006-01-02", value); err != nil {
+		return fmt.Errorf("invalid external durations date %q", value)
+	}
+	return nil
+}
+
 type externalDurationKey struct {
 	provider string
 	category string
@@ -59,6 +70,9 @@ func NewExternalDurationsCollector(in CommonInputs, logger log.Logger) (Collecto
 	date := in.Config.ExternalDurations.Date
 	if date == "" {
 		date = "today"
+	}
+	if err := validateExternalDurationsDate(date); err != nil {
+		return nil, err
 	}
 	cacheTTL := in.Config.ExternalDurations.CacheTTL
 	if cacheTTL <= 0 {
@@ -83,13 +97,13 @@ func NewExternalDurationsCollector(in CommonInputs, logger log.Logger) (Collecto
 		),
 		total: newMetricDesc(
 			"external_total_seconds",
-			"Total seconds from external durations.",
+			"Total seconds from external durations after filters.",
 		),
 		date:      date,
 		filter:    filter,
 		cacheTTL:  cacheTTL,
 		uri:       in.URI,
-		fetchStat: FetchHTTP(in.Token, in.AuthMode, in.SSLVerify, in.Timeout, logger),
+		fetchStat: FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
 		logger:    logger,
 	}, nil
 }

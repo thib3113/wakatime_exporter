@@ -114,7 +114,7 @@ func NewPrivateLeaderboardsCollector(in CommonInputs, logger log.Logger) (Collec
 		maxPages:  maxPages,
 		cacheTTL:  cacheTTL,
 		uri:       in.URI,
-		fetchStat: FetchHTTP(in.Token, in.AuthMode, in.SSLVerify, in.Timeout, logger),
+		fetchStat: FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
 		logger:    logger,
 	}, nil
 }
@@ -149,7 +149,9 @@ func (c *privateLeaderboardsCollector) Update(ch chan<- prometheus.Metric) error
 					user = "unknown"
 				}
 				ch <- prometheus.MustNewConstMetric(c.rank, prometheus.GaugeValue, float64(leader.Rank), board.ID, user, boardType)
-				ch <- prometheus.MustNewConstMetric(c.aiSpend, prometheus.GaugeValue, leader.RunningTotal.AIModelTotalCost, board.ID, user, boardType)
+				if boardType == "ai" || boardType == "spend" {
+					ch <- prometheus.MustNewConstMetric(c.aiSpend, prometheus.GaugeValue, leader.RunningTotal.AIModelTotalCost, board.ID, user, boardType)
+				}
 			}
 		}
 	}

@@ -90,7 +90,7 @@ func NewUserAgentsCollector(in CommonInputs, logger log.Logger) (Collector, erro
 		top:       in.Config.Inventory.Top,
 		cacheTTL:  cacheTTL,
 		uri:       in.URI,
-		fetchStat: FetchHTTP(in.Token, in.AuthMode, in.SSLVerify, in.Timeout, logger),
+		fetchStat: FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
 		logger:    logger,
 	}, nil
 }

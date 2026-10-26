@@ -330,7 +330,9 @@ for usage.
 `--stats.top` (default `50`) and `--stats.min-seconds` (default `60`) limit
 cardinality; set both to `0` to export every entry. `--stats.include` /
 `--stats.exclude` filter `dimension:name` (e.g. `language:Other`) before these
-limits are applied.
+limits are applied. `all-time` emits no metric when WakaTime reports
+`is_up_to_date=false`; `stats` emits the last known values with
+`wakatime_stats_up_to_date{...} 0`.
 Disable the collector with `--collector.stats=false` or `WAKA_COLLECTOR_STATS=false`.
 
 ## Additional collectors
@@ -373,7 +375,7 @@ cardinality.
 | `wakatime_user_agent_created_timestamp` | `id`, `editor` |
 | `wakatime_user_agents_available` | – |
 | `wakatime_user_agents_total` | – |
-| `wakatime_project_info` | `name`, `id`, `repository`, `public_url` |
+| `wakatime_project_info` | `name`, `id`, `repository`, `has_public_url` |
 | `wakatime_project_first_heartbeat_timestamp` | `name` |
 | `wakatime_project_last_heartbeat_timestamp` | `name` |
 | `wakatime_project_created_timestamp` | `name` |
@@ -429,7 +431,8 @@ insights.
 Use it to separate meetings, calendar events and external AI coding from IDE
 coding. `--external-durations.date` defaults to `today`. `--external-durations.include`
 / `--external-durations.exclude` filter `project:`, `provider:`, `category:`
-and `language:` values.
+and `language:` values. `wakatime_external_total_seconds` is computed after
+those filters.
 
 ### Private leaderboards (`private-leaderboards`, disabled by default)
 
@@ -445,7 +448,8 @@ and `language:` values.
 `--private-leaderboards.types` defaults to `time,ai,spend`, and
 `--private-leaderboards.max-pages` defaults to `1` and applies to the board
 list and to each leaderboard. `available` is the count before the board filter,
-`total` is the count exported after it.
+`total` is the count exported after it. `ai_spend_usd` is only emitted for
+`ai` and `spend` board types.
 
 ### Organizations (`orgs`, disabled by default)
 

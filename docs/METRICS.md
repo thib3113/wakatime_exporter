@@ -244,7 +244,7 @@ wakatime_insight_up_to_date{insight="weekdays",range="all_time"} 1
 # TYPE wakatime_external_seconds gauge
 wakatime_external_seconds{category="communicating",language="",project="example-project",provider="google_calendar"} 900
 
-# HELP wakatime_external_total_seconds Total seconds from external durations.
+# HELP wakatime_external_total_seconds Total seconds from external durations after filters.
 # TYPE wakatime_external_total_seconds gauge
 wakatime_external_total_seconds 900
 

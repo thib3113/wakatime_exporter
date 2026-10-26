@@ -16,6 +16,8 @@ limitations under the License.
 package main
 
 import (
+	"crypto/tls"
+	"html"
 	"net/http"
 	"net/url"
 	"os"
@@ -350,13 +352,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	http.Handle(*metricsPath, newHandler(collector.CommonInputs{
-		BaseURI:   *wakaBaseURI,
-		URI:       UserPath(wakaBaseURI, *wakaUser),
-		Token:     *wakaToken,
-		AuthMode:  *wakaAuthMode,
-		SSLVerify: *wakaSSLVerify,
-		Timeout:   *wakaTimeout,
+	if !strings.HasPrefix(*metricsPath, "/") || strings.ContainsAny(*metricsPath, "{} \t\r\n") {
+		level.Error(logger).Log("msg", "Invalid metrics path", "path", *metricsPath)
+		os.Exit(1)
+	}
+
+	httpClient := &http.Client{
+		Timeout: *wakaTimeout,
+		Transport: &http.Transport{
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: !*wakaSSLVerify},
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 20,
+			IdleConnTimeout:     90 * time.Second,
+			ForceAttemptHTTP2:   true,
+		},
+	}
+
+	mux := http.NewServeMux()
+	mux.Handle(*metricsPath, newHandler(collector.CommonInputs{
+		BaseURI:    *wakaBaseURI,
+		URI:        UserPath(wakaBaseURI, *wakaUser),
+		Token:      *wakaToken,
+		AuthMode:   *wakaAuthMode,
+		SSLVerify:  *wakaSSLVerify,
+		Timeout:    *wakaTimeout,
+		HTTPClient: httpClient,
 		Config: collector.Config{
 			Stats: collector.StatsConfig{
 				Range:      *statsRange,
@@ -408,19 +428,22 @@ func main() {
 			},
 		},
 	}, !*disableExporterMetrics, logger))
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>
-			<head><title>Wakatime Exporter</title></head>
-			<body>
-			<h1>Wakatime Exporter</h1>
-			<p><a href="` + *metricsPath + `">Metrics</a></p>
-			</body>
-			</html>`))
-	})
+	if *metricsPath != "/" {
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`<html>
+				<head><title>Wakatime Exporter</title></head>
+				<body>
+				<h1>Wakatime Exporter</h1>
+				<p><a href="` + html.EscapeString(*metricsPath) + `">Metrics</a></p>
+				</body>
+				</html>`))
+		})
+	}
 
 	level.Info(logger).Log("msg", "Listening on", "address", *listenAddress)
 	server := &http.Server{
 		Addr:              *listenAddress,
+		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,

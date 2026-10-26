@@ -16,7 +16,6 @@ limitations under the License.
 package collector
 
 import (
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -75,24 +74,15 @@ const namespace = "wakatime"
 const (
 	maxConcurrentAPIRequests = 8
 	maxResponseBytes         = 32 << 20
+	apiSlotTimeout           = 30 * time.Second
 )
 
 var apiRequestSlots = make(chan struct{}, maxConcurrentAPIRequests)
 
-// BoolToBinary converts booleans to "0" or "1"
-func BoolToBinary(b bool) string {
-	if b {
-		return "1"
-	}
-	return "0"
-}
-
 // FetchHTTP is a generic fetch method for Wakatime API endpoints
-func FetchHTTP(token string, authMode string, sslVerify bool, timeout time.Duration, logger log.Logger) func(uri url.URL, subPath string, params url.Values) (io.ReadCloser, error) {
-	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: !sslVerify}}
-	client := http.Client{
-		Timeout:   timeout,
-		Transport: tr,
+func FetchHTTP(client *http.Client, token string, authMode string, logger log.Logger) func(uri url.URL, subPath string, params url.Values) (io.ReadCloser, error) {
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Second}
 	}
 	authHeader := AuthorizationHeader(token, authMode)
 	return func(uri url.URL, subPath string, params url.Values) (io.ReadCloser, error) {
@@ -111,7 +101,13 @@ func FetchHTTP(token string, authMode string, sslVerify bool, timeout time.Durat
 			"Authorization": {authHeader},
 		}
 
-		apiRequestSlots <- struct{}{}
+		timer := time.NewTimer(apiSlotTimeout)
+		select {
+		case apiRequestSlots <- struct{}{}:
+			timer.Stop()
+		case <-timer.C:
+			return nil, fmt.Errorf("timeout waiting for an API request slot")
+		}
 		resp, err := client.Do(req)
 		if err != nil {
 			if resp != nil && resp.Body != nil {
@@ -122,14 +118,33 @@ func FetchHTTP(token string, authMode string, sslVerify bool, timeout time.Durat
 		}
 
 		if !(resp.StatusCode >= 200 && resp.StatusCode < 300) {
+			io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 			resp.Body.Close()
 			<-apiRequestSlots
-			return nil, fmt.Errorf("HTTP status %d", resp.StatusCode)
+			return nil, httpStatusError(resp)
 		}
 		return &releasingReadCloser{
 			ReadCloser: resp.Body,
 			release:    func() { <-apiRequestSlots },
 		}, nil
+	}
+}
+
+func httpStatusError(resp *http.Response) error {
+	switch resp.StatusCode {
+	case 401:
+		return fmt.Errorf("HTTP status 401: unauthorized (check API key/token)")
+	case 402:
+		return fmt.Errorf("HTTP status 402: payment required (feature not available on this WakaTime plan)")
+	case 403:
+		return fmt.Errorf("HTTP status 403: forbidden (missing OAuth scope?)")
+	case 429:
+		if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
+			return fmt.Errorf("HTTP status 429: rate limited (retry after %s)", retryAfter)
+		}
+		return fmt.Errorf("HTTP status 429: rate limited")
+	default:
+		return fmt.Errorf("HTTP status %d", resp.StatusCode)
 	}
 }
 

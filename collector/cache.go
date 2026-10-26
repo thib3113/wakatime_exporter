@@ -21,9 +21,10 @@ import (
 )
 
 type ttlCache[T any] struct {
-	mu    sync.Mutex
-	value *T
-	until time.Time
+	mu      sync.Mutex
+	value   *T
+	until   time.Time
+	flights flightGroup
 }
 
 func (c *ttlCache[T]) get(ttl time.Duration, fetch func() (*T, error)) (*T, error) {
@@ -35,14 +36,16 @@ func (c *ttlCache[T]) get(ttl time.Duration, fetch func() (*T, error)) (*T, erro
 	}
 	c.mu.Unlock()
 
-	value, err := fetch()
-	if err != nil {
-		return nil, err
-	}
+	return singleflightDo(&c.flights, "value", func() (*T, error) {
+		value, err := fetch()
+		if err != nil {
+			return nil, err
+		}
 
-	c.mu.Lock()
-	c.value = value
-	c.until = time.Now().Add(ttl)
-	c.mu.Unlock()
-	return value, nil
+		c.mu.Lock()
+		c.value = value
+		c.until = time.Now().Add(ttl)
+		c.mu.Unlock()
+		return value, nil
+	})
 }

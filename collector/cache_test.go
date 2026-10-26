@@ -18,6 +18,7 @@ package collector
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -66,11 +67,13 @@ func TestTTLCache(t *testing.T) {
 func TestTTLCacheConcurrent(t *testing.T) {
 	var cache ttlCache[int]
 	var wg sync.WaitGroup
+	var calls int32
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			value, err := cache.get(time.Hour, func() (*int, error) {
+				atomic.AddInt32(&calls, 1)
 				time.Sleep(10 * time.Millisecond)
 				result := 42
 				return &result, nil
@@ -85,4 +88,7 @@ func TestTTLCacheConcurrent(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("expected a single fetch, got %d", got)
+	}
 }
