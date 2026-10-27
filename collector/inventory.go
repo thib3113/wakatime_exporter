@@ -17,7 +17,7 @@ package collector
 
 import "sort"
 
-func selectInventory[T any](items []T, dimension string, name func(T) string, timestamp func(T) float64, filter *nameFilter, top int) []T {
+func selectInventory[T any](items []T, dimension string, name func(T) string, timestamp func(T) float64, filter *nameFilter, top int) ([]T, int) {
 	out := make([]T, 0, len(items))
 	for _, item := range items {
 		if !filter.Match(dimensionValue(dimension, name(item))) {
@@ -25,6 +25,7 @@ func selectInventory[T any](items []T, dimension string, name func(T) string, ti
 		}
 		out = append(out, item)
 	}
+	total := len(out)
 	sort.SliceStable(out, func(i, j int) bool {
 		left, right := timestamp(out[i]), timestamp(out[j])
 		if left == right {
@@ -35,5 +36,5 @@ func selectInventory[T any](items []T, dimension string, name func(T) string, ti
 	if top > 0 && len(out) > top {
 		out = out[:top]
 	}
-	return out
+	return out, total - len(out)
 }

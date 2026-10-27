@@ -145,10 +145,11 @@ func (c *projectsCollector) Update(ch chan<- prometheus.Metric) error {
 			}
 		}
 	}
-	projects := selectInventory(candidates, "project",
+	projects, dropped := selectInventory(candidates, "project",
 		func(project wakatimeProject) string { return project.Name },
 		func(project wakatimeProject) float64 { return parseUnixSecondsOrZero(project.LastHeartbeatAt) },
 		c.inventoryFilter, c.top)
+	warnDropped(c.logger, "projects", "project", len(projects)+dropped, len(projects))
 	if len(projects) == 0 {
 		ch <- prometheus.MustNewConstMetric(c.total, prometheus.GaugeValue, 0)
 		return nil

@@ -224,7 +224,9 @@ func (c *insightsCollector) emit(ch chan<- prometheus.Metric, insightType string
 func (c *insightsCollector) emitWeekdays(ch chan<- prometheus.Metric, raw json.RawMessage) bool {
 	var named []insightNamed
 	if json.Unmarshal(raw, &named) == nil && len(named) > 0 {
-		for _, entry := range trimInsightNamed(named, c.top, c.minSeconds) {
+		trimmed := trimInsightNamed(named, c.top, c.minSeconds)
+		warnDropped(c.logger, "insights", "weekdays", len(named), len(trimmed))
+		for _, entry := range trimmed {
 			name := insightName(entry)
 			if name == "" {
 				continue
@@ -240,7 +242,9 @@ func (c *insightsCollector) emitWeekdays(ch chan<- prometheus.Metric, raw json.R
 		for name, seconds := range values {
 			entries = append(entries, insightNamed{Name: name, TotalSeconds: seconds})
 		}
-		for _, entry := range trimInsightNamed(entries, c.top, c.minSeconds) {
+		trimmed := trimInsightNamed(entries, c.top, c.minSeconds)
+		warnDropped(c.logger, "insights", "weekdays", len(entries), len(trimmed))
+		for _, entry := range trimmed {
 			ch <- prometheus.MustNewConstMetric(c.weekdaySeconds, prometheus.GaugeValue, entry.TotalSeconds, c.rangeName, entry.Name)
 		}
 		return true
@@ -278,7 +282,9 @@ func (c *insightsCollector) emitDays(ch chan<- prometheus.Metric, insightType st
 		return false
 	}
 
-	for _, day := range trimInsightDays(days, c.top, c.minSeconds) {
+	trimmed := trimInsightDays(days, c.top, c.minSeconds)
+	warnDropped(c.logger, "insights", insightType, len(days), len(trimmed))
+	for _, day := range trimmed {
 		if day.Date != "" {
 			ch <- prometheus.MustNewConstMetric(c.daySeconds, prometheus.GaugeValue, day.TotalSeconds, c.rangeName, insightType, day.Date)
 		}
@@ -294,7 +300,9 @@ func (c *insightsCollector) emitDays(ch chan<- prometheus.Metric, insightType st
 func (c *insightsCollector) emitNamed(ch chan<- prometheus.Metric, insightType string, raw json.RawMessage) bool {
 	var named []insightNamed
 	if json.Unmarshal(raw, &named) == nil && len(named) > 0 {
-		for _, entry := range trimInsightNamed(named, c.top, c.minSeconds) {
+		trimmed := trimInsightNamed(named, c.top, c.minSeconds)
+		warnDropped(c.logger, "insights", insightType, len(named), len(trimmed))
+		for _, entry := range trimmed {
 			name := insightName(entry)
 			if name == "" {
 				continue
@@ -310,7 +318,9 @@ func (c *insightsCollector) emitNamed(ch chan<- prometheus.Metric, insightType s
 		for name, seconds := range values {
 			entries = append(entries, insightNamed{Name: name, TotalSeconds: seconds})
 		}
-		for _, entry := range trimInsightNamed(entries, c.top, c.minSeconds) {
+		trimmed := trimInsightNamed(entries, c.top, c.minSeconds)
+		warnDropped(c.logger, "insights", insightType, len(entries), len(trimmed))
+		for _, entry := range trimmed {
 			ch <- prometheus.MustNewConstMetric(c.namedSeconds, prometheus.GaugeValue, entry.TotalSeconds, c.rangeName, insightType, entry.Name)
 		}
 		return true

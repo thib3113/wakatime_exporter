@@ -244,6 +244,7 @@ func (c *aiBreakdownCollector) emit(ch chan<- prometheus.Metric, dimension strin
 	if c.top > 0 && len(kept) > c.top {
 		kept = kept[:c.top]
 	}
+	warnDropped(c.logger, "ai-breakdown", dimension, len(entries), len(kept))
 
 	level.Info(c.logger).Log(
 		"msg", "Collecting AI breakdown from Wakatime",

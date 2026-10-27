@@ -123,7 +123,7 @@ func TestStatsCollector(t *testing.T) {
 		map[string]string{"range": "all_time", "kind": "holidays"})
 	assertGauge(t, families, "wakatime_stats_ai_model_lines", 1234,
 		map[string]string{"range": "all_time", "model": "model-alpha"})
-	assertGauge(t, families, "wakatime_stats_ai_model_lines", 567,
+	assertNoGauge(t, families, "wakatime_stats_ai_model_lines",
 		map[string]string{"range": "all_time", "model": "model-beta"})
 	assertNoGauge(t, families, "wakatime_stats_project_seconds",
 		map[string]string{"range": "all_time", "name": "small-project"})

@@ -151,7 +151,7 @@ func main() {
 
 		statsTop = kingpin.Flag(
 			"stats.top",
-			"Keep at most N entries per stats dimension (0 = all).",
+			"Keep at most N entries per stats dimension and AI model lines (0 = all).",
 		).Default("50").Envar("WAKA_STATS_TOP").Int()
 
 		statsMinSeconds = kingpin.Flag(
@@ -166,13 +166,18 @@ func main() {
 
 		aiTop = kingpin.Flag(
 			"ai.top",
-			"Keep at most N entries per AI breakdown dimension (0 = all).",
+			"Keep at most N AI entries (projects, models and breakdown dimensions; 0 = all).",
 		).Default("50").Envar("WAKA_AI_TOP").Int()
 
 		aiMinTokens = kingpin.Flag(
 			"ai.min-tokens",
 			"Drop AI breakdown entries below this many total tokens (0 = keep all).",
 		).Default("1000").Envar("WAKA_AI_MIN_TOKENS").Int64()
+
+		aiMinSeconds = kingpin.Flag(
+			"ai.min-seconds",
+			"Drop AI project entries below this many seconds (0 = keep all).",
+		).Default("60").Envar("WAKA_AI_MIN_SECONDS").Float64()
 
 		aiCacheTTL = kingpin.Flag(
 			"ai.cache-ttl",
@@ -227,7 +232,7 @@ func main() {
 		inventoryTop = kingpin.Flag(
 			"inventory.top",
 			"Keep at most N user agents, projects and machines by recency (0 = all).",
-		).Default("0").Envar("WAKA_INVENTORY_TOP").Int()
+		).Default("50").Envar("WAKA_INVENTORY_TOP").Int()
 
 		inventoryInclude = kingpin.Flag(
 			"inventory.include",
@@ -279,6 +284,16 @@ func main() {
 			"How long to cache external durations between scrapes.",
 		).Default("15m").Envar("WAKA_EXTERNAL_DURATIONS_CACHE_TTL").Duration()
 
+		externalDurationsTop = kingpin.Flag(
+			"external-durations.top",
+			"Keep at most N external duration entries (0 = all).",
+		).Default("50").Envar("WAKA_EXTERNAL_DURATIONS_TOP").Int()
+
+		externalDurationsMinSeconds = kingpin.Flag(
+			"external-durations.min-seconds",
+			"Drop external duration entries below this many seconds (0 = keep all).",
+		).Default("60").Envar("WAKA_EXTERNAL_DURATIONS_MIN_SECONDS").Float64()
+
 		privateLeaderboardsBoards = kingpin.Flag(
 			"private-leaderboards.boards",
 			"Comma-separated private leaderboard IDs (empty = all).",
@@ -293,6 +308,11 @@ func main() {
 			"private-leaderboards.max-pages",
 			"Maximum number of pages to fetch per leaderboard (1 = first page only).",
 		).Default("1").Envar("WAKA_PRIVATE_LEADERBOARDS_MAX_PAGES").Int()
+
+		privateLeaderboardsTop = kingpin.Flag(
+			"private-leaderboards.top",
+			"Keep at most N leaders per board and type (0 = all).",
+		).Default("50").Envar("WAKA_PRIVATE_LEADERBOARDS_TOP").Int()
 
 		privateLeaderboardsCacheTTL = kingpin.Flag(
 			"private-leaderboards.cache-ttl",
@@ -394,6 +414,7 @@ func main() {
 				Dimensions: splitCSV(*aiBreakdown),
 				Top:        *aiTop,
 				MinTokens:  *aiMinTokens,
+				MinSeconds: *aiMinSeconds,
 				CacheTTL:   *aiCacheTTL,
 				Filter:     collector.FilterConfig{Include: *aiInclude, Exclude: *aiExclude},
 			},
@@ -411,14 +432,17 @@ func main() {
 				CacheTTL:       *inventoryCacheTTL,
 			},
 			ExternalDurations: collector.ExternalDurationsConfig{
-				Date:     *externalDurationsDate,
-				CacheTTL: *externalDurationsCacheTTL,
-				Filter:   collector.FilterConfig{Include: *externalDurationsInclude, Exclude: *externalDurationsExclude},
+				Date:       *externalDurationsDate,
+				Top:        *externalDurationsTop,
+				MinSeconds: *externalDurationsMinSeconds,
+				CacheTTL:   *externalDurationsCacheTTL,
+				Filter:     collector.FilterConfig{Include: *externalDurationsInclude, Exclude: *externalDurationsExclude},
 			},
 			PrivateLeaderboards: collector.PrivateLeaderboardsConfig{
 				Boards:   splitCSV(*privateLeaderboardsBoards),
 				Types:    splitCSV(*privateLeaderboardsTypes),
 				MaxPages: *privateLeaderboardsMaxPages,
+				Top:      *privateLeaderboardsTop,
 				CacheTTL: *privateLeaderboardsCacheTTL,
 			},
 			Orgs: collector.OrgsConfig{

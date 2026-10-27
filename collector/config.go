@@ -46,6 +46,7 @@ type AIBreakdownConfig struct {
 	Dimensions []string
 	Top        int
 	MinTokens  int64
+	MinSeconds float64
 	CacheTTL   time.Duration
 	Filter     FilterConfig
 }
@@ -66,15 +67,18 @@ type InventoryConfig struct {
 }
 
 type ExternalDurationsConfig struct {
-	Date     string
-	CacheTTL time.Duration
-	Filter   FilterConfig
+	Date       string
+	Top        int
+	MinSeconds float64
+	CacheTTL   time.Duration
+	Filter     FilterConfig
 }
 
 type PrivateLeaderboardsConfig struct {
 	Boards   []string
 	Types    []string
 	MaxPages int
+	Top      int
 	CacheTTL time.Duration
 }
 

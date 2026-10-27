@@ -82,14 +82,15 @@ Flags:
   --stats.range="all_time"           Time range for the stats collector: all_time, last_7_days, last_30_days,
                                      last_6_months, last_year, YYYY, or YYYY-MM.
   --stats.cache-ttl=1h               How long to cache the stats response between scrapes.
-  --stats.top=50                     Keep at most N entries per stats dimension (0 = all).
+  --stats.top=50                     Keep at most N entries per stats dimension and AI model lines (0 = all).
   --stats.min-seconds=60             Drop stats entries below this many seconds (0 = keep all).
   --stats.include=REGEX              Regex matched against dimension:name for stats.
   --stats.exclude=REGEX              Regex matched against dimension:name; matching entries are dropped.
   --ai.breakdown="language"          Comma-separated durations slice_by dimensions for AI breakdown
                                      (language, editor, os, category, machine, project, entity, dependencies).
-  --ai.top=50                        Keep at most N entries per AI breakdown dimension (0 = all).
+  --ai.top=50                        Keep at most N AI entries (projects, models and breakdown dimensions; 0 = all).
   --ai.min-tokens=1000               Drop AI breakdown entries below this many total tokens (0 = keep all).
+  --ai.min-seconds=60                Drop AI project entries below this many seconds (0 = keep all).
   --ai.cache-ttl=15m                 How long to cache AI breakdown responses between scrapes.
   --ai.include=REGEX                 Regex matched against <slice>:<name> for AI breakdown metrics.
   --ai.exclude=REGEX                 Regex matched against <slice>:<name>; matching entries are dropped.
@@ -99,7 +100,7 @@ Flags:
   --insights.cache-ttl=1h            How long to cache insights responses between scrapes.
   --insights.top=50                  Keep at most N entries per insights dimension (0 = all).
   --insights.min-seconds=60          Drop insights entries below this many seconds (0 = keep all).
-  --inventory.top=0                  Keep at most N user agents/projects/machines by recency (0 = all).
+  --inventory.top=50                 Keep at most N user agents/projects/machines by recency (0 = all).
   --inventory.include=REGEX          Regex matched against editor:, project:, machine: for inventory.
   --inventory.exclude=REGEX          Regex matched against editor:, project:, machine:; matching entries are dropped.
   --inventory.cache-ttl=1h           Cache duration for user agents, projects and machines.
@@ -108,10 +109,13 @@ Flags:
   --external-durations.include=REGEX Regex matched against project:, provider:, category:, language:.
   --external-durations.exclude=REGEX Regex matched against project:, provider:, category:, language:; matching entries are dropped.
   --external-durations.cache-ttl=15m How long to cache external durations between scrapes.
+  --external-durations.top=50        Keep at most N external duration entries (0 = all).
+  --external-durations.min-seconds=60 Drop external duration entries below this many seconds.
   --private-leaderboards.boards=""   Comma-separated private leaderboard IDs (empty = all).
   --private-leaderboards.types="time,ai,spend"
                                      Comma-separated leaderboard types.
   --private-leaderboards.max-pages=1 Maximum number of pages per leaderboard.
+  --private-leaderboards.top=50      Keep at most N leaders per board and type (0 = all).
   --private-leaderboards.cache-ttl=1h
                                      How long to cache private leaderboards between scrapes.
   --orgs.ids=""                      Comma-separated organization IDs (empty = all).
@@ -158,13 +162,14 @@ WAKA_COLLECTOR_SUMMARY="true"                 # Enable the summary collector.
 WAKA_COLLECTOR_USERAGENTS="true"              # Enable the user-agents collector.
 WAKA_STATS_RANGE="all_time"                   # Time range for the stats collector.
 WAKA_STATS_CACHE_TTL="1h"                     # Cache duration for the stats response.
-WAKA_STATS_TOP="50"                           # Max entries per stats dimension (0 = all).
+WAKA_STATS_TOP="50"                           # Max entries per stats dimension and AI model lines.
 WAKA_STATS_MIN_SECONDS="60"                   # Drop stats entries below this many seconds.
 WAKA_STATS_INCLUDE=""                         # Regex on dimension:name for stats (include).
 WAKA_STATS_EXCLUDE=""                         # Regex on dimension:name for stats (exclude).
 WAKA_AI_BREAKDOWN="language"                  # AI breakdown dimensions (comma-separated).
-WAKA_AI_TOP="50"                              # Max entries per AI breakdown dimension (0 = all).
+WAKA_AI_TOP="50"                              # Max AI entries (projects, models, breakdown dimensions).
 WAKA_AI_MIN_TOKENS="1000"                     # Drop AI breakdown entries below this many tokens.
+WAKA_AI_MIN_SECONDS="60"                      # Drop AI project entries below this many seconds.
 WAKA_AI_CACHE_TTL="15m"                       # Cache duration for AI breakdown responses.
 WAKA_AI_INCLUDE=""                            # Regex on <slice>:<name> for AI breakdown (include).
 WAKA_AI_EXCLUDE=""                            # Regex on <slice>:<name> for AI breakdown (exclude).
@@ -173,7 +178,7 @@ WAKA_INSIGHTS_RANGE="all_time"                # Time range for insights.
 WAKA_INSIGHTS_CACHE_TTL="1h"                  # Cache duration for insights responses.
 WAKA_INSIGHTS_TOP="50"                        # Max entries per insights dimension.
 WAKA_INSIGHTS_MIN_SECONDS="60"                # Drop insights entries below this many seconds.
-WAKA_INVENTORY_TOP="0"                        # Keep N most recent user agents/projects/machines.
+WAKA_INVENTORY_TOP="50"                       # Keep N most recent user agents/projects/machines.
 WAKA_INVENTORY_INCLUDE=""                     # Regex on editor:, project:, machine: (include).
 WAKA_INVENTORY_EXCLUDE=""                     # Regex on editor:, project:, machine: (exclude).
 WAKA_INVENTORY_CACHE_TTL="1h"                 # Cache duration for user agents, projects, machines.
@@ -182,9 +187,12 @@ WAKA_EXTERNAL_DURATIONS_DATE="today"          # Date for external durations.
 WAKA_EXTERNAL_DURATIONS_INCLUDE=""            # Regex on project:, provider:, category:, language: (include).
 WAKA_EXTERNAL_DURATIONS_EXCLUDE=""            # Regex on project:, provider:, category:, language: (exclude).
 WAKA_EXTERNAL_DURATIONS_CACHE_TTL="15m"       # Cache duration for external durations.
+WAKA_EXTERNAL_DURATIONS_TOP="50"              # Max external duration entries (0 = all).
+WAKA_EXTERNAL_DURATIONS_MIN_SECONDS="60"      # Drop external durations below this many seconds.
 WAKA_PRIVATE_LEADERBOARDS_BOARDS=""           # Leaderboard IDs (empty = all).
 WAKA_PRIVATE_LEADERBOARDS_TYPES="time,ai,spend"
 WAKA_PRIVATE_LEADERBOARDS_MAX_PAGES="1"       # Max pages per leaderboard.
+WAKA_PRIVATE_LEADERBOARDS_TOP="50"            # Max leaders per board and type (0 = all).
 WAKA_PRIVATE_LEADERBOARDS_CACHE_TTL="1h"      # Cache duration for private leaderboards.
 WAKA_ORGS_IDS=""                              # Organization IDs (empty = all).
 WAKA_ORGS_CACHE_TTL="1h"                      # Cache duration for organizations.
@@ -364,11 +372,11 @@ dimension and exposes AI usage for that dimension.
 `--ai.breakdown` defaults to `language`; accepted values are `project`,
 `entity`, `language`, `dependencies`, `os`, `editor`, `category`, `machine`.
 Each dimension is a separate API call, cached for `--ai.cache-ttl` (default
-`15m`). `--ai.top` (default `50`) and `--ai.min-tokens` (default `1000`) limit
-cardinality. `--ai.include` / `--ai.exclude` filter `<slice>:<name>` (e.g.
-`language:Other`). Avoid `entity` and `dependencies` unless you really need
-them: their label values are file paths / dependency lists and can explode
-cardinality.
+`15m`). `--ai.top` (default `50`) and `--ai.min-seconds` (default `60`) limit the
+AI collector; `--ai.min-tokens` (default `1000`) limits AI breakdown entries.
+`--ai.include` / `--ai.exclude` filter `<slice>:<name>` (e.g. `language:Other`).
+Avoid `entity` and `dependencies` unless you really need them: their label
+values are file paths / dependency lists and can explode cardinality.
 
 ### Inventory (`user-agents`, `projects`, `machines`)
 
@@ -394,7 +402,7 @@ cardinality.
 These are the fastest way to answer “is my IDE still sending?” and “when did
 project X last report?”. They are cached for `--inventory.cache-ttl` (default
 `1h`). `--projects.filter` accepts a regex on project names. `--inventory.top`
-keeps the N most recent entries, and `--inventory.include` /
+keeps the N most recent entries (default `50`), and `--inventory.include` /
 `--inventory.exclude` filter `editor:`, `project:` and `machine:` values.
 `*_available` is the raw API count before filters/top; `*_total` is the count
 actually exported after filters/top.
@@ -436,7 +444,8 @@ Use it to separate meetings, calendar events and external AI coding from IDE
 coding. `--external-durations.date` defaults to `today`. `--external-durations.include`
 / `--external-durations.exclude` filter `project:`, `provider:`, `category:`
 and `language:` values. `wakatime_external_total_seconds` is computed after
-those filters.
+those filters and the `--external-durations.top` / `--external-durations.min-seconds`
+limits.
 
 ### Private leaderboards (`private-leaderboards`, disabled by default)
 
@@ -451,9 +460,10 @@ those filters.
 `--private-leaderboards.boards` filters by ID (empty = all),
 `--private-leaderboards.types` defaults to `time,ai,spend`, and
 `--private-leaderboards.max-pages` defaults to `1` and applies to the board
-list and to each leaderboard. `available` is the count before the board filter,
-`total` is the count exported after it. `ai_spend_usd` is only emitted for
-`ai` and `spend` board types.
+list and to each leaderboard. `--private-leaderboards.top` defaults to `50` and
+keeps the top-ranked leaders per board and type. `available` is the count before
+the board filter, `total` is the count exported after it. `ai_spend_usd` is only
+emitted for `ai` and `spend` board types.
 
 ### Organizations (`orgs`, disabled by default)
 
@@ -507,6 +517,13 @@ Four complementary levels:
 4. **Prometheus** — arbitrary drops via `metric_relabel_configs` (on
    `__name__` or any label value) and `write_relabel_configs` before
    remote-writing to Thanos/Mimir.
+
+Default limits are enabled: `stats` 50/60 s, `ai` 50/60 s, `ai-breakdown`
+50/1000 tokens, `insights` 50/60 s, `inventory` 50, `heartbeats` 50/1,
+`external-durations` 50/60 s, `private-leaderboards` 50. Set any limit to
+`0` to disable it. When entries are dropped, the exporter logs a warning with
+the collector, dimension, total and kept counts. Warnings are rate-limited to
+once every 5 minutes per collector and dimension.
 
 #### Composite filters (env-friendly)
 

@@ -39,6 +39,8 @@ type aiCollector struct {
 	promptLengthSum   *prometheus.Desc
 	promptLengthAvg   *prometheus.Desc
 	secondsPerProject *prometheus.Desc
+	top               int
+	minSeconds        float64
 	uri               url.URL
 	fetchStat         func(url.URL, string, url.Values) (io.ReadCloser, error)
 	logger            log.Logger
@@ -92,9 +94,11 @@ func NewAICollector(in CommonInputs, logger log.Logger) (Collector, error) {
 			"Total seconds per project, summed from Wakatime durations.",
 			"name",
 		),
-		uri:       in.URI,
-		fetchStat: FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
-		logger:    logger,
+		top:        in.Config.AI.Top,
+		minSeconds: in.Config.AI.MinSeconds,
+		uri:        in.URI,
+		fetchStat:  FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
+		logger:     logger,
 	}, nil
 }
 
@@ -161,8 +165,10 @@ func (c *aiCollector) Update(ch chan<- prometheus.Metric) error {
 	ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.CounterValue, float64(aiInputTokens), "input")
 	ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.CounterValue, float64(aiOutputTokens), "output")
 
-	for model, cost := range costsByModel {
-		ch <- prometheus.MustNewConstMetric(c.costUSD, prometheus.CounterValue, cost, model)
+	models := topNamedValues(costsByModel, c.top, 0)
+	warnDropped(c.logger, "ai", "model", len(costsByModel), len(models))
+	for _, model := range models {
+		ch <- prometheus.MustNewConstMetric(c.costUSD, prometheus.CounterValue, model.value, model.name)
 	}
 
 	ch <- prometheus.MustNewConstMetric(c.sessions, prometheus.CounterValue, float64(aiSessions))
@@ -175,8 +181,10 @@ func (c *aiCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 	ch <- prometheus.MustNewConstMetric(c.promptLengthAvg, prometheus.GaugeValue, promptLengthAvg)
 
-	for project, seconds := range secondsByProject {
-		ch <- prometheus.MustNewConstMetric(c.secondsPerProject, prometheus.CounterValue, seconds, project)
+	projects := topNamedValues(secondsByProject, c.top, c.minSeconds)
+	warnDropped(c.logger, "ai", "project", len(secondsByProject), len(projects))
+	for _, project := range projects {
+		ch <- prometheus.MustNewConstMetric(c.secondsPerProject, prometheus.CounterValue, project.value, project.name)
 	}
 
 	return nil

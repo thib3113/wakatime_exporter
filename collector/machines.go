@@ -118,10 +118,11 @@ func (c *machinesCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 
 	ch <- prometheus.MustNewConstMetric(c.available, prometheus.GaugeValue, float64(len(data.Data)))
-	machines := selectInventory(data.Data, "machine",
+	machines, dropped := selectInventory(data.Data, "machine",
 		func(machine wakatimeMachine) string { return machine.Name },
 		func(machine wakatimeMachine) float64 { return parseUnixSecondsOrZero(machine.LastSeenAt) },
 		c.filter, c.top)
+	warnDropped(c.logger, "machines", "machine", len(machines)+dropped, len(machines))
 	if len(machines) == 0 {
 		ch <- prometheus.MustNewConstMetric(c.total, prometheus.GaugeValue, 0)
 		return nil

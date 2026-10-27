@@ -118,10 +118,11 @@ func (c *userAgentsCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 
 	ch <- prometheus.MustNewConstMetric(c.available, prometheus.GaugeValue, float64(len(data.Data)))
-	agents := selectInventory(data.Data, "editor",
+	agents, dropped := selectInventory(data.Data, "editor",
 		func(agent wakatimeUserAgent) string { return agent.Editor },
 		func(agent wakatimeUserAgent) float64 { return parseUnixSecondsOrZero(agent.LastSeenAt) },
 		c.filter, c.top)
+	warnDropped(c.logger, "user-agents", "editor", len(agents)+dropped, len(agents))
 	if len(agents) == 0 {
 		ch <- prometheus.MustNewConstMetric(c.total, prometheus.GaugeValue, 0)
 		return nil

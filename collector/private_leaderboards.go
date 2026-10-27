@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"time"
 
@@ -56,6 +57,7 @@ type privateLeaderboardsCollector struct {
 	boards    []string
 	types     []string
 	maxPages  int
+	top       int
 	cache     ttlCache[privateLeaderboardSnapshot]
 	cacheTTL  time.Duration
 	uri       url.URL
@@ -120,6 +122,7 @@ func NewPrivateLeaderboardsCollector(in CommonInputs, logger log.Logger) (Collec
 		boards:    in.Config.PrivateLeaderboards.Boards,
 		types:     types,
 		maxPages:  maxPages,
+		top:       in.Config.PrivateLeaderboards.Top,
 		cacheTTL:  cacheTTL,
 		uri:       in.URI,
 		fetchStat: FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
@@ -148,7 +151,15 @@ func (c *privateLeaderboardsCollector) Update(ch chan<- prometheus.Metric) error
 			strconv.Itoa(board.MembersCount),
 		)
 		for _, boardType := range c.types {
-			for _, leader := range snapshot.Leaders[board.ID][boardType] {
+			leaders := append([]wakatimePrivateLeaderboardLeader(nil), snapshot.Leaders[board.ID][boardType]...)
+			sort.SliceStable(leaders, func(i, j int) bool {
+				return leaders[i].Rank < leaders[j].Rank
+			})
+			if c.top > 0 && len(leaders) > c.top {
+				warnDropped(c.logger, "private-leaderboards", board.ID+"/"+boardType, len(leaders), c.top)
+				leaders = leaders[:c.top]
+			}
+			for _, leader := range leaders {
 				user := leader.User.Username
 				if user == "" {
 					user = leader.User.ID

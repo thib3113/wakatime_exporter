@@ -379,7 +379,7 @@ func (c *statsCollector) emit(ch chan<- prometheus.Metric, data *wakatimeStatsDa
 	metric(c.timeoutMinutes, float64(data.Timeout), r)
 	metric(c.writesOnly, boolToFloat(data.WritesOnly), r)
 
-	projects := trimStats(data.Projects, "project", func(entry wakatimeStatsProject) string { return entry.Name }, func(entry wakatimeStatsProject) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter)
+	projects := trimWarn(c.logger, "stats", "project", data.Projects, func(entry wakatimeStatsProject) string { return entry.Name }, func(entry wakatimeStatsProject) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter)
 	for _, entry := range projects {
 		metric(c.project, entry.TotalSeconds, r, entry.Name)
 		if entry.AIInputTokens != 0 || entry.AIOutputTokens != 0 ||
@@ -400,22 +400,22 @@ func (c *statsCollector) emit(ch chan<- prometheus.Metric, data *wakatimeStatsDa
 			metric(c.projectAIPromptEvents, float64(entry.AIPromptEvents), r, entry.Name)
 		}
 	}
-	for _, entry := range trimStats(data.Languages, "language", func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimWarn(c.logger, "stats", "language", data.Languages, func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.language, entry.TotalSeconds, r, entry.Name)
 	}
-	for _, entry := range trimStats(data.Editors, "editor", func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimWarn(c.logger, "stats", "editor", data.Editors, func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.editor, entry.TotalSeconds, r, entry.Name)
 	}
-	for _, entry := range trimStats(data.Categories, "category", func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimWarn(c.logger, "stats", "category", data.Categories, func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.category, entry.TotalSeconds, r, entry.Name)
 	}
-	for _, entry := range trimStats(data.OperatingSystems, "os", func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimWarn(c.logger, "stats", "os", data.OperatingSystems, func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.operatingSystem, entry.TotalSeconds, r, entry.Name)
 	}
-	for _, entry := range trimStats(data.Machines, "machine", func(entry wakatimeStatsMachine) string { return entry.Name }, func(entry wakatimeStatsMachine) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimWarn(c.logger, "stats", "machine", data.Machines, func(entry wakatimeStatsMachine) string { return entry.Name }, func(entry wakatimeStatsMachine) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.machine, entry.TotalSeconds, r, entry.MachineNameID, entry.Name)
 	}
-	for _, entry := range trimStats(data.Dependencies, "dependency", func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
+	for _, entry := range trimWarn(c.logger, "stats", "dependency", data.Dependencies, func(entry wakatimeStatsEntry) string { return entry.Name }, func(entry wakatimeStatsEntry) float64 { return entry.TotalSeconds }, c.top, c.minSeconds, c.filter) {
 		metric(c.dependency, entry.TotalSeconds, r, entry.Name)
 	}
 
@@ -436,9 +436,10 @@ func (c *statsCollector) emit(ch chan<- prometheus.Metric, data *wakatimeStatsDa
 			models = append(models, wakatimeStatsAIModel{Name: name, Lines: lines})
 		}
 	}
-	sort.SliceStable(models, func(i, j int) bool {
-		return models[i].Name < models[j].Name
-	})
+	models = trimWarn(c.logger, "stats", "ai_model", models,
+		func(model wakatimeStatsAIModel) string { return model.Name },
+		func(model wakatimeStatsAIModel) float64 { return float64(model.Lines) },
+		c.top, 0, nil)
 	for _, model := range models {
 		if model.Name == "" || model.Lines == 0 {
 			continue
@@ -466,7 +467,7 @@ func sortedCostModels(costs map[string]float64) []string {
 	return models
 }
 
-func trimStats[T any](items []T, dimension string, name func(T) string, seconds func(T) float64, top int, minSeconds float64, filter *nameFilter) []T {
+func trimStats[T any](items []T, dimension string, name func(T) string, seconds func(T) float64, top int, minSeconds float64, filter *nameFilter) ([]T, int) {
 	out := make([]T, 0, len(items))
 	for _, item := range items {
 		if !filter.Match(dimensionValue(dimension, name(item))) {
@@ -481,6 +482,7 @@ func trimStats[T any](items []T, dimension string, name func(T) string, seconds 
 		}
 		return left > right
 	})
+	total := len(out)
 	if minSeconds > 0 {
 		filtered := out[:0]
 		for _, item := range out {
@@ -493,5 +495,5 @@ func trimStats[T any](items []T, dimension string, name func(T) string, seconds 
 	if top > 0 && len(out) > top {
 		out = out[:top]
 	}
-	return out
+	return out, total - len(out)
 }

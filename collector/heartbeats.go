@@ -187,6 +187,7 @@ func (c *heartbeatsCollector) Update(ch chan<- prometheus.Metric) error {
 	if c.top > 0 && len(kept) > c.top {
 		kept = kept[:c.top]
 	}
+	warnDropped(c.logger, "heartbeats", "project", len(entries), len(kept))
 
 	var exported int64
 	for _, entry := range kept {

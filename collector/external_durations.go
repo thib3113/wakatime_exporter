@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -32,16 +33,18 @@ const (
 )
 
 type externalDurationsCollector struct {
-	seconds   *prometheus.Desc
-	count     *prometheus.Desc
-	total     *prometheus.Desc
-	date      string
-	filter    *nameFilter
-	cache     ttlCache[wakatimeExternalDurations]
-	cacheTTL  time.Duration
-	uri       url.URL
-	fetchStat func(url.URL, string, url.Values) (io.ReadCloser, error)
-	logger    log.Logger
+	seconds    *prometheus.Desc
+	count      *prometheus.Desc
+	total      *prometheus.Desc
+	date       string
+	top        int
+	minSeconds float64
+	filter     *nameFilter
+	cache      ttlCache[wakatimeExternalDurations]
+	cacheTTL   time.Duration
+	uri        url.URL
+	fetchStat  func(url.URL, string, url.Values) (io.ReadCloser, error)
+	logger     log.Logger
 }
 
 func validateExternalDurationsDate(value string) error {
@@ -97,14 +100,16 @@ func NewExternalDurationsCollector(in CommonInputs, logger log.Logger) (Collecto
 		),
 		total: newMetricDesc(
 			"external_total_seconds",
-			"Total seconds from external durations after filters.",
+			"Total seconds from external durations after filters and limits.",
 		),
-		date:      date,
-		filter:    filter,
-		cacheTTL:  cacheTTL,
-		uri:       in.URI,
-		fetchStat: FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
-		logger:    logger,
+		date:       date,
+		top:        in.Config.ExternalDurations.Top,
+		minSeconds: in.Config.ExternalDurations.MinSeconds,
+		filter:     filter,
+		cacheTTL:   cacheTTL,
+		uri:        in.URI,
+		fetchStat:  FetchHTTP(in.HTTPClient, in.Token, in.AuthMode, logger),
+		logger:     logger,
 	}, nil
 }
 
@@ -134,7 +139,6 @@ func (c *externalDurationsCollector) Update(ch chan<- prometheus.Metric) error {
 
 	seconds := map[externalDurationKey]float64{}
 	counts := map[externalDurationKey]int{}
-	var total float64
 	for _, duration := range data.Data {
 		length := duration.EndTime - duration.StartTime
 		if length < 0 {
@@ -156,13 +160,45 @@ func (c *externalDurationsCollector) Update(ch chan<- prometheus.Metric) error {
 		}
 		seconds[key] += length
 		counts[key]++
-		total += length
 	}
 
-	level.Info(c.logger).Log("msg", "Collecting external durations from Wakatime", "date", c.date, "count", len(data.Data))
-	ch <- prometheus.MustNewConstMetric(c.total, prometheus.GaugeValue, total)
+	keys := make([]externalDurationKey, 0, len(seconds))
 	for key, value := range seconds {
-		ch <- prometheus.MustNewConstMetric(c.seconds, prometheus.GaugeValue, value, key.provider, key.category, key.project, key.language)
+		if c.minSeconds > 0 && value < c.minSeconds {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.SliceStable(keys, func(i, j int) bool {
+		left, right := seconds[keys[i]], seconds[keys[j]]
+		if left == right {
+			if keys[i].provider != keys[j].provider {
+				return keys[i].provider < keys[j].provider
+			}
+			if keys[i].category != keys[j].category {
+				return keys[i].category < keys[j].category
+			}
+			if keys[i].project != keys[j].project {
+				return keys[i].project < keys[j].project
+			}
+			return keys[i].language < keys[j].language
+		}
+		return left > right
+	})
+	if c.top > 0 && len(keys) > c.top {
+		keys = keys[:c.top]
+	}
+	warnDropped(c.logger, "external-durations", "provider/category/project/language", len(seconds), len(keys))
+
+	var total float64
+	for _, key := range keys {
+		total += seconds[key]
+	}
+
+	level.Info(c.logger).Log("msg", "Collecting external durations from Wakatime", "date", c.date, "count", len(data.Data), "kept", len(keys))
+	ch <- prometheus.MustNewConstMetric(c.total, prometheus.GaugeValue, total)
+	for _, key := range keys {
+		ch <- prometheus.MustNewConstMetric(c.seconds, prometheus.GaugeValue, seconds[key], key.provider, key.category, key.project, key.language)
 		ch <- prometheus.MustNewConstMetric(c.count, prometheus.GaugeValue, float64(counts[key]), key.provider, key.category, key.project, key.language)
 	}
 
