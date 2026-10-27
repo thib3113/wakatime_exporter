@@ -407,6 +407,9 @@ keeps the N most recent entries (default `50`), and `--inventory.include` /
 `*_available` is the raw API count before filters/top; `*_total` is the count
 actually exported after filters/top.
 
+Timestamp metrics are emitted only when WakaTime returns parseable RFC3339
+timestamps; otherwise the affected timestamp series is omitted.
+
 ### Insights (`insights`, disabled by default)
 
 | Metric | Labels | Description |
@@ -461,9 +464,10 @@ limits.
 `--private-leaderboards.types` defaults to `time,ai,spend`, and
 `--private-leaderboards.max-pages` defaults to `1` and applies to the board
 list and to each leaderboard. `--private-leaderboards.top` defaults to `50` and
-keeps the top-ranked leaders per board and type. `available` is the count before
-the board filter, `total` is the count exported after it. `ai_spend_usd` is only
-emitted for `ai` and `spend` board types.
+keeps the top-ranked leaders per board and type. `available` is the number of
+boards returned by the paginated board list before the board filter (so it is
+bounded by `--private-leaderboards.max-pages`); `total` is the count exported
+after filtering. `ai_spend_usd` is only emitted for `ai` and `spend` board types.
 
 ### Organizations (`orgs`, disabled by default)
 
@@ -479,8 +483,9 @@ emitted for `ai` and `spend` board types.
 
 Only the organization list is exported; dashboards, members and org summaries
 are not (yet). `--orgs.ids` filters by organization ID (empty = all).
-`available` is the count before the ID filter, `total` is the count exported
-after it.
+`available` is the number of organizations returned by the paginated list
+(up to 10 pages) before the ID filter, not a global count; `total` is the count
+exported after filtering.
 
 ### Heartbeats (`heartbeats`, disabled by default)
 
@@ -509,7 +514,9 @@ Four complementary levels:
    only the requested collectors run. This is what Prometheus `params:` uses;
    combine it with separate scrape jobs and `scrape_interval` (fast vs slow
    collectors). At most 32 distinct `collect[]` filter sets are cached;
-   additional sets are rejected with HTTP 429.
+   additional sets are rejected with HTTP 429. Each filter set has its own
+   collector instances and caches, so different filter sets do not share cached
+   API responses.
 3. **Per-collector limits and filters** — `--stats.top`,
    `--stats.min-seconds`, `--inventory.top`, `--ai.top`, `--ai.min-tokens`,
    `--insights.top`, `--insights.min-seconds`, `--heartbeats.top`, plus the
@@ -570,14 +577,35 @@ To drop a series regardless of the collector logic, use Prometheus
 Caches are **not** served stale on API errors: if a refresh fails, the
 collector emits no value until the next successful fetch.
 
-Collectors receive the scrape context. If Prometheus disconnects or the scrape
-exceeds 30 s, in-flight WakaTime requests and pending semaphore waits are
+Collectors receive the scrape context. A 30 s handler deadline starts after the
+per-handler serialization lock is acquired; if Prometheus disconnects or that
+deadline expires, in-flight WakaTime requests and pending semaphore waits are
 cancelled. `--wakatime.timeout` still bounds each individual request. Scrapes
 are serialized per metrics handler, so a slow scrape delays the next instead
-of overlapping it.
+of overlapping it, and a queued scrape can take longer than 30 s end-to-end.
 
 HTTP 429 responses set a global backoff from `Retry-After` (1 s to 5 min);
 scrapes fail fast until it expires instead of hammering WakaTime.
+
+### Scrape success and partial failures
+
+`wakatime_scrape_collector_success{collector="..."}` is `1` when a collector
+succeeds **or returns `ErrNoData`** (a valid empty response), and `0` only for
+fetch/parse failures. This changes the meaning compared with v0.3: use
+`absent_over_time(...)` for no-data alerts instead of `success == 0`.
+
+For collectors that make several sub-requests (`insights`, `ai-breakdown`),
+success is `1` if at least one sub-request emitted data; other sub-request
+failures are logged but do not flip the metric. Check the exporter logs if a
+collector emits less data than expected.
+
+```promql
+# fetch/parse failure
+wakatime_scrape_collector_success{collector="ai"} == 0
+
+# collector succeeded but produced no data
+absent_over_time(wakatime_ai_lines_total[1h])
+```
 
 ### Exposure
 
@@ -585,6 +613,77 @@ The exporter does not authenticate `/metrics`. Machine IPs, repository URLs,
 usernames, organization names and editor versions may be exposed. Expose it
 only to Prometheus (private network / NetworkPolicy) and protect the endpoint
 with a reverse proxy (auth/mTLS) if needed.
+
+## Upgrading from v0.3
+
+v0.4.0 adds collectors and changes a few defaults. Existing `ai`, `summary`,
+`goal`, `leader` and `all-time` metrics keep their names, with one exception.
+
+### Metric rename
+
+`wakatime_ai_seconds_total` is now `wakatime_durations_seconds_total`; the
+`name` label is unchanged. Update dashboards, recording rules and alerts:
+
+```promql
+# before
+sum by (name) (wakatime_ai_seconds_total)
+
+# after
+sum by (name) (wakatime_durations_seconds_total)
+```
+
+### Cardinality limits
+
+Default caps are enabled for `stats`, `ai`, `ai-breakdown`, `insights`,
+`inventory`, `heartbeats`, `external-durations` and `private-leaderboards`.
+Entries outside the top-N or below the minimum are dropped after filters. The
+AI project-duration metric is now capped by `--ai.top` / `--ai.min-seconds`.
+
+Set the relevant `top` / `min-*` options to `0` to export everything:
+
+```text
+--stats.top=0 --stats.min-seconds=0 \
+--ai.top=0 --ai.min-tokens=0 --ai.min-seconds=0 \
+--insights.top=0 --insights.min-seconds=0 \
+--inventory.top=0 \
+--heartbeats.top=0 --heartbeats.min-count=0 \
+--external-durations.top=0 --external-durations.min-seconds=0 \
+--private-leaderboards.top=0
+```
+
+### New default collectors
+
+`stats`, `ai-breakdown`, `external-durations`, `user-agents`, `projects` and
+`machines` are enabled by default. They may need additional OAuth scopes; see
+[Authentication](#authentication). To keep the v0.3.0 collector set:
+
+```text
+--collector.stats=false \
+--collector.ai-breakdown=false \
+--collector.external-durations=false \
+--collector.projects=false \
+--collector.machines=false \
+--collector.user-agents=false
+```
+
+`insights`, `heartbeats`, `orgs` and `private-leaderboards` remain disabled by
+default.
+
+### Scrape behavior
+
+- `ErrNoData` now reports `wakatime_scrape_collector_success` `1`; see
+  [Scrape success and partial failures](#scrape-success-and-partial-failures).
+- Scrapes have a 30 s handler deadline and are serialized per handler; queued
+  scrapes can take longer end-to-end.
+- `summary` now returns an error if the API returns more than one summary
+  instead of silently using the first.
+- Invalid users, metrics paths, ranges, insight types, AI dimensions and
+  include/exclude regexes fail at startup.
+
+### Images
+
+The git tag is `v0.4.0`; image tags are semver without the `v`
+(`0.4.0`, `0.4`, `0`, `latest`). No configuration-file changes are required.
 
 ## Compatibility
 

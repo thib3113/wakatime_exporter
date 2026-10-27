@@ -1,5 +1,11 @@
 # Example Metrics
 
+> This file is a representative sample, not an exhaustive metric reference.
+> The README sections **AI collector**, **Stats collector** and **Additional
+> collectors** document every metric and label. Timestamp metrics are omitted
+> when WakaTime does not return an RFC3339 value; `*_available` may be bounded
+> by pagination for organizations and private leaderboards.
+
 ```text
 # HELP wakatime_language_seconds_total Total seconds for each language
 # TYPE wakatime_language_seconds_total counter
@@ -38,11 +44,11 @@ wakatime_seconds_total 6600
 
 # HELP wakatime_goal_threshold_seconds The goal as set through the wakatime interface.
 # TYPE wakatime_goal_threshold_seconds gauge
-wakatime_goal_threshold_seconds{delta="day",enabled="true",id="goal-1",ignore_zero_days="1",inverse="false",name="Daily coding goal",snoozed="false",tweeting="false",type="coding"} 3600
+wakatime_goal_threshold_seconds{delta="day",enabled="true",id="goal-1",ignore_zero_days="true",inverse="false",name="Daily coding goal",snoozed="false",tweeting="false",type="coding"} 3600
 
 # HELP wakatime_goal_progress_seconds Progress towards the goal.
 # TYPE wakatime_goal_progress_seconds counter
-wakatime_goal_progress_seconds{delta="day",enabled="true",id="goal-1",ignore_zero_days="1",inverse="false",name="Daily coding goal",snoozed="false",tweeting="false",type="coding"} 1800
+wakatime_goal_progress_seconds{delta="day",enabled="true",id="goal-1",ignore_zero_days="true",inverse="false",name="Daily coding goal",snoozed="false",tweeting="false",type="coding"} 1800
 
 # HELP wakatime_rank Current rank of the user.
 # TYPE wakatime_rank gauge
@@ -184,6 +190,14 @@ wakatime_ai_breakdown_prompt_length_chars_sum{name="Go",slice="language"} 120
 # TYPE wakatime_user_agent_info gauge
 wakatime_user_agent_info{ai_model="model-alpha",ai_model_complexity="high",ai_model_version="4",browser_extension="false",desktop_app="true",editor="VS Code",id="ua1",os="Linux",version="1.2.3"} 1
 
+# HELP wakatime_user_agent_last_seen_timestamp Unix timestamp when the user agent was last seen.
+# TYPE wakatime_user_agent_last_seen_timestamp gauge
+wakatime_user_agent_last_seen_timestamp{editor="VS Code",id="ua1"} 1.7357e+09
+
+# HELP wakatime_user_agent_created_timestamp Unix timestamp when the user agent was first seen.
+# TYPE wakatime_user_agent_created_timestamp gauge
+wakatime_user_agent_created_timestamp{editor="VS Code",id="ua1"} 1.704e+09
+
 # HELP wakatime_user_agents_available Number of WakaTime user agents before filters and top limits.
 # TYPE wakatime_user_agents_available gauge
 wakatime_user_agents_available 100
@@ -192,9 +206,21 @@ wakatime_user_agents_available 100
 # TYPE wakatime_user_agents_total gauge
 wakatime_user_agents_total 50
 
+# HELP wakatime_project_info WakaTime project metadata.
+# TYPE wakatime_project_info gauge
+wakatime_project_info{has_public_url="false",id="p1",name="example-project",repository="https://github.com/example/project"} 1
+
+# HELP wakatime_project_first_heartbeat_timestamp Unix timestamp of the first heartbeat for the project.
+# TYPE wakatime_project_first_heartbeat_timestamp gauge
+wakatime_project_first_heartbeat_timestamp{name="example-project"} 1.704e+09
+
 # HELP wakatime_project_last_heartbeat_timestamp Unix timestamp of the last heartbeat for the project.
 # TYPE wakatime_project_last_heartbeat_timestamp gauge
 wakatime_project_last_heartbeat_timestamp{name="example-project"} 1.7357e+09
+
+# HELP wakatime_project_created_timestamp Unix timestamp when the project was created.
+# TYPE wakatime_project_created_timestamp gauge
+wakatime_project_created_timestamp{name="example-project"} 1.704e+09
 
 # HELP wakatime_projects_available Number of WakaTime projects before filters and top limits.
 # TYPE wakatime_projects_available gauge
@@ -208,6 +234,14 @@ wakatime_projects_total 3
 # TYPE wakatime_machine_info gauge
 wakatime_machine_info{id="m1",ip="10.0.0.1",name="laptop",timezone="Europe/Paris"} 1
 
+# HELP wakatime_machine_last_seen_timestamp Unix timestamp when the machine was last seen.
+# TYPE wakatime_machine_last_seen_timestamp gauge
+wakatime_machine_last_seen_timestamp{id="m1",name="laptop"} 1.7357e+09
+
+# HELP wakatime_machine_created_timestamp Unix timestamp when the machine was first seen.
+# TYPE wakatime_machine_created_timestamp gauge
+wakatime_machine_created_timestamp{id="m1",name="laptop"} 1.704e+09
+
 # HELP wakatime_machines_available Number of WakaTime machines before filters and top limits.
 # TYPE wakatime_machines_available gauge
 wakatime_machines_available 20
@@ -215,6 +249,10 @@ wakatime_machines_available 20
 # HELP wakatime_machines_total Number of WakaTime machines exported after filters and top limits.
 # TYPE wakatime_machines_total gauge
 wakatime_machines_total 10
+
+# HELP wakatime_insight_seconds Coding seconds for a named insight dimension.
+# TYPE wakatime_insight_seconds gauge
+wakatime_insight_seconds{insight="projects",name="example-project",range="all_time"} 3600
 
 # HELP wakatime_insight_weekday_seconds Coding seconds per weekday.
 # TYPE wakatime_insight_weekday_seconds gauge
@@ -244,6 +282,10 @@ wakatime_insight_up_to_date{insight="weekdays",range="all_time"} 1
 # TYPE wakatime_external_seconds gauge
 wakatime_external_seconds{category="communicating",language="",project="example-project",provider="google_calendar"} 900
 
+# HELP wakatime_external_durations Number of external durations.
+# TYPE wakatime_external_durations gauge
+wakatime_external_durations{category="communicating",language="",project="example-project",provider="google_calendar"} 3
+
 # HELP wakatime_external_total_seconds Total seconds from external durations after filters and limits.
 # TYPE wakatime_external_total_seconds gauge
 wakatime_external_total_seconds 900
@@ -251,6 +293,18 @@ wakatime_external_total_seconds 900
 # HELP wakatime_heartbeats Number of heartbeats per project.
 # TYPE wakatime_heartbeats gauge
 wakatime_heartbeats{project="example-project"} 2
+
+# HELP wakatime_heartbeats_write Number of write heartbeats per project.
+# TYPE wakatime_heartbeats_write gauge
+wakatime_heartbeats_write{project="example-project"} 1
+
+# HELP wakatime_heartbeats_ai_tokens AI tokens used in heartbeats per project.
+# TYPE wakatime_heartbeats_ai_tokens gauge
+wakatime_heartbeats_ai_tokens{kind="input",project="example-project"} 1200
+
+# HELP wakatime_heartbeats_ai_sessions Distinct AI sessions seen in heartbeats per project.
+# TYPE wakatime_heartbeats_ai_sessions gauge
+wakatime_heartbeats_ai_sessions{project="example-project"} 2
 
 # HELP wakatime_heartbeats_total Total number of heartbeats before filters and top limits.
 # TYPE wakatime_heartbeats_total gauge
@@ -263,6 +317,14 @@ wakatime_heartbeats_exported_total 120
 # HELP wakatime_private_leaderboard_rank Rank of a user in a private leaderboard.
 # TYPE wakatime_private_leaderboard_rank gauge
 wakatime_private_leaderboard_rank{board="b1",board_type="ai",user="alice"} 1
+
+# HELP wakatime_private_leaderboard_info WakaTime private leaderboard metadata.
+# TYPE wakatime_private_leaderboard_info gauge
+wakatime_private_leaderboard_info{board="b1",members_count="5",name="Example board",time_range="last_7_days"} 1
+
+# HELP wakatime_private_leaderboard_ai_spend_usd AI spend of a user in a private leaderboard.
+# TYPE wakatime_private_leaderboard_ai_spend_usd gauge
+wakatime_private_leaderboard_ai_spend_usd{board="b1",board_type="ai",user="alice"} 12.5
 
 # HELP wakatime_private_leaderboards_available Number of private leaderboards before filters.
 # TYPE wakatime_private_leaderboards_available gauge
