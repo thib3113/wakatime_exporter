@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/url"
@@ -34,7 +35,7 @@ const (
 type alltimeCollector struct {
 	total     *prometheus.Desc
 	uri       url.URL
-	fetchStat func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger    log.Logger
 }
 
@@ -56,11 +57,11 @@ func NewAllTimeCollector(in CommonInputs, logger log.Logger) (Collector, error) 
 	}, nil
 }
 
-func (c *alltimeCollector) Update(ch chan<- prometheus.Metric) error {
+func (c *alltimeCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	params := url.Values{}
 	params.Add("cache", "false")
 
-	body, fetchErr := c.fetchStat(c.uri, allTimeEndpoint, params)
+	body, fetchErr := c.fetchStat(ctx, c.uri, allTimeEndpoint, params)
 	if fetchErr != nil {
 		return fetchErr
 	}

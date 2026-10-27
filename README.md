@@ -570,11 +570,11 @@ To drop a series regardless of the collector logic, use Prometheus
 Caches are **not** served stale on API errors: if a refresh fails, the
 collector emits no value until the next successful fetch.
 
-Some collectors issue multiple sequential requests per refresh (AI breakdown
-dimensions, insights types, leaderboard pages). There is no scrape-context
-propagation; `--wakatime.timeout` bounds each request and the 30 s handler
-timeout bounds the HTTP response, but in-flight work may continue until those
-requests finish.
+Collectors receive the scrape context. If Prometheus disconnects or the scrape
+exceeds 30 s, in-flight WakaTime requests and pending semaphore waits are
+cancelled. `--wakatime.timeout` still bounds each individual request. Scrapes
+are serialized per metrics handler, so a slow scrape delays the next instead
+of overlapping it.
 
 HTTP 429 responses set a global backoff from `Retry-After` (1 s to 5 min);
 scrapes fail fast until it expires instead of hammering WakaTime.

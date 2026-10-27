@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -40,7 +41,7 @@ type summaryCollector struct {
 	project         *prometheus.Desc
 	category        *prometheus.Desc
 	uri             url.URL
-	fetchStat       func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat       func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger          log.Logger
 }
 
@@ -92,13 +93,13 @@ func NewSummaryCollector(in CommonInputs, logger log.Logger) (Collector, error) 
 	}, nil
 }
 
-func (c *summaryCollector) Update(ch chan<- prometheus.Metric) error {
+func (c *summaryCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	params := url.Values{}
 	params.Add("start", "today")
 	params.Add("end", "today")
 	params.Add("cache", "false")
 
-	body, fetchErr := c.fetchStat(c.uri, summaryEndpoint, params)
+	body, fetchErr := c.fetchStat(ctx, c.uri, summaryEndpoint, params)
 	if fetchErr != nil {
 		return fetchErr
 	}

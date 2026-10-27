@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -44,7 +45,7 @@ func TestStatsCollectorConcurrent(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			ch := make(chan prometheus.Metric, 10000)
-			if err := collector.Update(ch); err != nil {
+			if err := collector.UpdateContext(context.Background(), ch); err != nil {
 				t.Errorf("Update: %v", err)
 			}
 			close(ch)

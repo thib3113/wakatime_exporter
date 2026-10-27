@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -38,7 +39,7 @@ func collectSamples(t *testing.T, c Collector) []metricSample {
 	ch := make(chan prometheus.Metric, 10000)
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- c.Update(ch)
+		errCh <- c.UpdateContext(context.Background(), ch)
 		close(ch)
 	}()
 
@@ -101,13 +102,13 @@ func assertNoGaugeSample(t *testing.T, samples []metricSample, name string, labe
 	}
 }
 
-func fakeFetchJSON(body string) func(url.URL, string, url.Values) (io.ReadCloser, error) {
-	return func(url.URL, string, url.Values) (io.ReadCloser, error) {
+func fakeFetchJSON(body string) func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error) {
+	return func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error) {
 		return io.NopCloser(strings.NewReader(body)), nil
 	}
 }
 
-func fakeFetchByPath(responses map[string]string) func(url.URL, string, url.Values) (io.ReadCloser, error) {
+func fakeFetchByPath(responses map[string]string) func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error) {
 	keys := make([]string, 0, len(responses))
 	for key := range responses {
 		keys = append(keys, key)
@@ -116,7 +117,7 @@ func fakeFetchByPath(responses map[string]string) func(url.URL, string, url.Valu
 		return len(keys[i]) > len(keys[j])
 	})
 
-	return func(_ url.URL, subPath string, _ url.Values) (io.ReadCloser, error) {
+	return func(_ context.Context, _ url.URL, subPath string, _ url.Values) (io.ReadCloser, error) {
 		for _, key := range keys {
 			if strings.HasPrefix(subPath, key) {
 				return io.NopCloser(strings.NewReader(responses[key])), nil

@@ -17,6 +17,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -95,6 +96,9 @@ func registerCollector(collector string, isDefaultEnabled bool, factory func(in 
 type WakaCollector struct {
 	Collectors map[string]Collector
 	logger     log.Logger
+
+	ctxMu sync.RWMutex
+	ctx   context.Context
 }
 
 // DisableDefaultCollectors sets the collector state to false for all collectors which
@@ -150,27 +154,47 @@ func NewWakaCollector(in CommonInputs, logger log.Logger, filters ...string) (*W
 }
 
 // Describe implements the prometheus.Collector interface.
-func (n WakaCollector) Describe(ch chan<- *prometheus.Desc) {
+func (n *WakaCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- scrapeDurationDesc
 	ch <- scrapeSuccessDesc
 }
 
+// SetContext sets the context used by the next Collect call.
+func (n *WakaCollector) SetContext(ctx context.Context) {
+	n.ctxMu.Lock()
+	n.ctx = ctx
+	n.ctxMu.Unlock()
+}
+
+func (n *WakaCollector) currentContext() context.Context {
+	n.ctxMu.RLock()
+	defer n.ctxMu.RUnlock()
+	if n.ctx == nil {
+		return context.Background()
+	}
+	return n.ctx
+}
+
 // Collect implements the prometheus.Collector interface.
-func (n WakaCollector) Collect(ch chan<- prometheus.Metric) {
+func (n *WakaCollector) Collect(ch chan<- prometheus.Metric) {
+	n.collect(n.currentContext(), ch)
+}
+
+func (n *WakaCollector) collect(ctx context.Context, ch chan<- prometheus.Metric) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(n.Collectors))
 	for name, c := range n.Collectors {
 		go func(name string, c Collector) {
-			execute(name, c, ch, n.logger)
-			wg.Done()
+			defer wg.Done()
+			execute(ctx, name, c, ch, n.logger)
 		}(name, c)
 	}
 	wg.Wait()
 }
 
-func execute(name string, c Collector, ch chan<- prometheus.Metric, logger log.Logger) {
+func execute(ctx context.Context, name string, c Collector, ch chan<- prometheus.Metric, logger log.Logger) {
 	begin := time.Now()
-	err := c.Update(ch)
+	err := c.UpdateContext(ctx, ch)
 	duration := time.Since(begin)
 	var success float64
 
@@ -193,7 +217,7 @@ func execute(name string, c Collector, ch chan<- prometheus.Metric, logger log.L
 // Collector is the interface a collector has to implement.
 type Collector interface {
 	// Get new metrics and expose them via prometheus registry.
-	Update(ch chan<- prometheus.Metric) error
+	UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error
 }
 
 // ErrNoData indicates the collector found no data to collect, but had no other error.

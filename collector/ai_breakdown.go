@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -53,23 +54,10 @@ type aiBreakdownCollector struct {
 	filter          *nameFilter
 	cacheTTL        time.Duration
 	uri             url.URL
-	fetchStat       func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat       func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger          log.Logger
 
 	cache keyedTTLCache[wakatimeDurations]
-}
-
-type aiBreakdownAggregate struct {
-	input           int64
-	output          int64
-	sessions        int64
-	promptEvents    int64
-	promptLengthSum float64
-	aiAdditions     int64
-	aiDeletions     int64
-	humanAdditions  int64
-	humanDeletions  int64
-	costs           map[string]float64
 }
 
 func init() {
@@ -139,12 +127,12 @@ func NewAIBreakdownCollector(in CommonInputs, logger log.Logger) (Collector, err
 	}, nil
 }
 
-func (c *aiBreakdownCollector) Update(ch chan<- prometheus.Metric) error {
+func (c *aiBreakdownCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	emitted := false
 	var firstErr error
 
 	for _, dimension := range c.dimensions {
-		data, err := c.getDurations(dimension)
+		data, err := c.getDurations(ctx, dimension)
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -168,14 +156,14 @@ func (c *aiBreakdownCollector) Update(ch chan<- prometheus.Metric) error {
 	return ErrNoData
 }
 
-func (c *aiBreakdownCollector) getDurations(dimension string) (*wakatimeDurations, error) {
+func (c *aiBreakdownCollector) getDurations(ctx context.Context, dimension string) (*wakatimeDurations, error) {
 	return c.cache.get(dimension, c.cacheTTL, func() (*wakatimeDurations, error) {
 		params := url.Values{}
 		params.Add("date", "today")
 		params.Add("slice_by", dimension)
 		params.Add("cache", "false")
 
-		body, fetchErr := c.fetchStat(c.uri, aiEndpoint, params)
+		body, fetchErr := c.fetchStat(ctx, c.uri, aiEndpoint, params)
 		if fetchErr != nil {
 			return nil, fetchErr
 		}
@@ -190,7 +178,7 @@ func (c *aiBreakdownCollector) getDurations(dimension string) (*wakatimeDuration
 }
 
 func (c *aiBreakdownCollector) emit(ch chan<- prometheus.Metric, dimension string, data *wakatimeDurations) {
-	byName := map[string]*aiBreakdownAggregate{}
+	byName := map[string]*aiTotals{}
 	for _, duration := range data.Data {
 		name := aiBreakdownValue(duration, dimension)
 		if name == "" {
@@ -198,26 +186,15 @@ func (c *aiBreakdownCollector) emit(ch chan<- prometheus.Metric, dimension strin
 		}
 		aggregate, ok := byName[name]
 		if !ok {
-			aggregate = &aiBreakdownAggregate{costs: map[string]float64{}}
+			aggregate = newAITotals()
 			byName[name] = aggregate
 		}
-		aggregate.input += duration.AIInputTokens
-		aggregate.output += duration.AIOutputTokens
-		aggregate.sessions += duration.AISessions
-		aggregate.promptEvents += duration.AIPromptEventsTotal
-		aggregate.promptLengthSum += duration.AIPromptLengthSum
-		aggregate.aiAdditions += duration.AIAdditions
-		aggregate.aiDeletions += duration.AIDeletions
-		aggregate.humanAdditions += duration.HumanAdditions
-		aggregate.humanDeletions += duration.HumanDeletions
-		for model, cost := range duration.AIModelCosts {
-			aggregate.costs[model] += cost
-		}
+		aggregate.addDuration(duration)
 	}
 
 	type namedAggregate struct {
 		name      string
-		aggregate *aiBreakdownAggregate
+		aggregate *aiTotals
 	}
 	entries := make([]namedAggregate, 0, len(byName))
 	for name, aggregate := range byName {
@@ -256,13 +233,13 @@ func (c *aiBreakdownCollector) emit(ch chan<- prometheus.Metric, dimension strin
 	for _, entry := range kept {
 		name := entry.name
 		aggregate := entry.aggregate
-		ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.GaugeValue, float64(aggregate.input), dimension, name, "input")
-		ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.GaugeValue, float64(aggregate.output), dimension, name, "output")
+		ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.GaugeValue, float64(aggregate.inputTokens), dimension, name, "input")
+		ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.GaugeValue, float64(aggregate.outputTokens), dimension, name, "output")
 		for _, model := range sortedCostModels(aggregate.costs) {
 			ch <- prometheus.MustNewConstMetric(c.costUSD, prometheus.GaugeValue, aggregate.costs[model], dimension, name, model)
 		}
-		ch <- prometheus.MustNewConstMetric(c.lines, prometheus.GaugeValue, float64(aggregate.aiAdditions), dimension, name, "ai", "additions")
-		ch <- prometheus.MustNewConstMetric(c.lines, prometheus.GaugeValue, float64(aggregate.aiDeletions), dimension, name, "ai", "deletions")
+		ch <- prometheus.MustNewConstMetric(c.lines, prometheus.GaugeValue, float64(aggregate.additions), dimension, name, "ai", "additions")
+		ch <- prometheus.MustNewConstMetric(c.lines, prometheus.GaugeValue, float64(aggregate.deletions), dimension, name, "ai", "deletions")
 		ch <- prometheus.MustNewConstMetric(c.lines, prometheus.GaugeValue, float64(aggregate.humanAdditions), dimension, name, "human", "additions")
 		ch <- prometheus.MustNewConstMetric(c.lines, prometheus.GaugeValue, float64(aggregate.humanDeletions), dimension, name, "human", "deletions")
 		ch <- prometheus.MustNewConstMetric(c.sessions, prometheus.GaugeValue, float64(aggregate.sessions), dimension, name)
@@ -303,6 +280,6 @@ func aiBreakdownValue(duration wakatimeDurationEntry, dimension string) string {
 	}
 }
 
-func aiBreakdownTotalTokens(aggregate *aiBreakdownAggregate) int64 {
-	return aggregate.input + aggregate.output
+func aiBreakdownTotalTokens(aggregate *aiTotals) int64 {
+	return aggregate.inputTokens + aggregate.outputTokens
 }

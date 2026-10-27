@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -42,7 +43,7 @@ type userAgentsCollector struct {
 	cache     ttlCache[wakatimeUserAgents]
 	cacheTTL  time.Duration
 	uri       url.URL
-	fetchStat func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger    log.Logger
 }
 
@@ -94,9 +95,9 @@ func NewUserAgentsCollector(in CommonInputs, logger log.Logger) (Collector, erro
 	}, nil
 }
 
-func (c *userAgentsCollector) Update(ch chan<- prometheus.Metric) error {
+func (c *userAgentsCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	data, err := c.cache.get(c.cacheTTL, func() (*wakatimeUserAgents, error) {
-		body, fetchErr := c.fetchStat(c.uri, userAgentsEndpoint, url.Values{})
+		body, fetchErr := c.fetchStat(ctx, c.uri, userAgentsEndpoint, url.Values{})
 		if fetchErr != nil {
 			return nil, fetchErr
 		}

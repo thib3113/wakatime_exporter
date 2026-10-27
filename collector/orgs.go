@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"io"
 	"net/url"
 	"strconv"
@@ -44,7 +45,7 @@ type orgsCollector struct {
 	cache        ttlCache[wakatimeOrgs]
 	cacheTTL     time.Duration
 	uri          url.URL
-	fetchStat    func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat    func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger       log.Logger
 }
 
@@ -100,13 +101,13 @@ func NewOrgsCollector(in CommonInputs, logger log.Logger) (Collector, error) {
 	}, nil
 }
 
-func (c *orgsCollector) Update(ch chan<- prometheus.Metric) error {
+func (c *orgsCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	data, err := c.cache.get(c.cacheTTL, func() (*wakatimeOrgs, error) {
 		orgs, err := paginate(maxOrgPages, func(page int) ([]wakatimeOrg, int, error) {
 			params := url.Values{}
 			params.Set("page", strconv.Itoa(page))
 
-			body, fetchErr := c.fetchStat(c.uri, orgsEndpoint, params)
+			body, fetchErr := c.fetchStat(ctx, c.uri, orgsEndpoint, params)
 			if fetchErr != nil {
 				return nil, 0, fetchErr
 			}

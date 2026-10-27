@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -45,7 +46,7 @@ type heartbeatsCollector struct {
 	cache         ttlCache[wakatimeHeartbeats]
 	cacheTTL      time.Duration
 	uri           url.URL
-	fetchStat     func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat     func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger        log.Logger
 }
 
@@ -111,12 +112,12 @@ func NewHeartbeatsCollector(in CommonInputs, logger log.Logger) (Collector, erro
 	}, nil
 }
 
-func (c *heartbeatsCollector) Update(ch chan<- prometheus.Metric) error {
+func (c *heartbeatsCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	data, err := c.cache.get(c.cacheTTL, func() (*wakatimeHeartbeats, error) {
 		params := url.Values{}
 		params.Add("date", "today")
 
-		body, fetchErr := c.fetchStat(c.uri, heartbeatsEndpoint, params)
+		body, fetchErr := c.fetchStat(ctx, c.uri, heartbeatsEndpoint, params)
 		if fetchErr != nil {
 			return nil, fetchErr
 		}

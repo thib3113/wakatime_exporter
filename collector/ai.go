@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"io"
 	"net/url"
 
@@ -42,7 +43,7 @@ type aiCollector struct {
 	top               int
 	minSeconds        float64
 	uri               url.URL
-	fetchStat         func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat         func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger            log.Logger
 }
 
@@ -102,12 +103,12 @@ func NewAICollector(in CommonInputs, logger log.Logger) (Collector, error) {
 	}, nil
 }
 
-func (c *aiCollector) Update(ch chan<- prometheus.Metric) error {
+func (c *aiCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	params := url.Values{}
 	params.Add("date", "today")
 	params.Add("cache", "false")
 
-	body, fetchErr := c.fetchStat(c.uri, aiEndpoint, params)
+	body, fetchErr := c.fetchStat(ctx, c.uri, aiEndpoint, params)
 	if fetchErr != nil {
 		return fetchErr
 	}
@@ -130,26 +131,11 @@ func (c *aiCollector) Update(ch chan<- prometheus.Metric) error {
 		"timezone", durations.Timezone,
 	)
 
-	var aiAdditions, aiDeletions, humanAdditions, humanDeletions int64
-	var aiInputTokens, aiOutputTokens int64
-	var aiSessions, aiPromptEvents int64
-	var aiPromptLengthSum float64
-	costsByModel := map[string]float64{}
+	totals := newAITotals()
 	secondsByProject := map[string]float64{}
 
 	for _, d := range durations.Data {
-		aiAdditions += d.AIAdditions
-		aiDeletions += d.AIDeletions
-		humanAdditions += d.HumanAdditions
-		humanDeletions += d.HumanDeletions
-		aiInputTokens += d.AIInputTokens
-		aiOutputTokens += d.AIOutputTokens
-		aiSessions += d.AISessions
-		aiPromptEvents += d.AIPromptEventsTotal
-		aiPromptLengthSum += d.AIPromptLengthSum
-		for model, cost := range d.AIModelCosts {
-			costsByModel[model] += cost
-		}
+		totals.addDuration(d)
 		if d.Project != "" {
 			secondsByProject[d.Project] += d.Duration
 		} else {
@@ -157,27 +143,27 @@ func (c *aiCollector) Update(ch chan<- prometheus.Metric) error {
 		}
 	}
 
-	ch <- prometheus.MustNewConstMetric(c.lines, prometheus.CounterValue, float64(aiAdditions), "ai", "additions")
-	ch <- prometheus.MustNewConstMetric(c.lines, prometheus.CounterValue, float64(aiDeletions), "ai", "deletions")
-	ch <- prometheus.MustNewConstMetric(c.lines, prometheus.CounterValue, float64(humanAdditions), "human", "additions")
-	ch <- prometheus.MustNewConstMetric(c.lines, prometheus.CounterValue, float64(humanDeletions), "human", "deletions")
+	ch <- prometheus.MustNewConstMetric(c.lines, prometheus.CounterValue, float64(totals.additions), "ai", "additions")
+	ch <- prometheus.MustNewConstMetric(c.lines, prometheus.CounterValue, float64(totals.deletions), "ai", "deletions")
+	ch <- prometheus.MustNewConstMetric(c.lines, prometheus.CounterValue, float64(totals.humanAdditions), "human", "additions")
+	ch <- prometheus.MustNewConstMetric(c.lines, prometheus.CounterValue, float64(totals.humanDeletions), "human", "deletions")
 
-	ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.CounterValue, float64(aiInputTokens), "input")
-	ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.CounterValue, float64(aiOutputTokens), "output")
+	ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.CounterValue, float64(totals.inputTokens), "input")
+	ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.CounterValue, float64(totals.outputTokens), "output")
 
-	models := topNamedValues(costsByModel, c.top, 0)
-	warnDropped(c.logger, "ai", "model", len(costsByModel), len(models))
+	models := topNamedValues(totals.costs, c.top, 0)
+	warnDropped(c.logger, "ai", "model", len(totals.costs), len(models))
 	for _, model := range models {
 		ch <- prometheus.MustNewConstMetric(c.costUSD, prometheus.CounterValue, model.value, model.name)
 	}
 
-	ch <- prometheus.MustNewConstMetric(c.sessions, prometheus.CounterValue, float64(aiSessions))
-	ch <- prometheus.MustNewConstMetric(c.promptEvents, prometheus.CounterValue, float64(aiPromptEvents))
-	ch <- prometheus.MustNewConstMetric(c.promptLengthSum, prometheus.CounterValue, float64(aiPromptLengthSum))
+	ch <- prometheus.MustNewConstMetric(c.sessions, prometheus.CounterValue, float64(totals.sessions))
+	ch <- prometheus.MustNewConstMetric(c.promptEvents, prometheus.CounterValue, float64(totals.promptEvents))
+	ch <- prometheus.MustNewConstMetric(c.promptLengthSum, prometheus.CounterValue, totals.promptLengthSum)
 
 	var promptLengthAvg float64
-	if aiPromptEvents > 0 {
-		promptLengthAvg = aiPromptLengthSum / float64(aiPromptEvents)
+	if totals.promptEvents > 0 {
+		promptLengthAvg = totals.promptLengthSum / float64(totals.promptEvents)
 	}
 	ch <- prometheus.MustNewConstMetric(c.promptLengthAvg, prometheus.GaugeValue, promptLengthAvg)
 

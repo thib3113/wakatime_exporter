@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -85,19 +86,22 @@ var (
 )
 
 // FetchHTTP is a generic fetch method for Wakatime API endpoints
-func FetchHTTP(client *http.Client, token string, authMode string, logger log.Logger) func(uri url.URL, subPath string, params url.Values) (io.ReadCloser, error) {
+func FetchHTTP(client *http.Client, token string, authMode string, logger log.Logger) func(ctx context.Context, uri url.URL, subPath string, params url.Values) (io.ReadCloser, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Second}
 	}
 	authHeader := AuthorizationHeader(token, authMode)
-	return func(uri url.URL, subPath string, params url.Values) (io.ReadCloser, error) {
+	return func(ctx context.Context, uri url.URL, subPath string, params url.Values) (io.ReadCloser, error) {
+		if ctx == nil {
+			ctx = context.Background()
+		}
 		uri.Path = path.Join(uri.Path, subPath)
 		uri.RawQuery = params.Encode()
 		url := uri.String()
 
 		level.Debug(logger).Log("msg", "Scraping Wakatime", "path", subPath, "url", uri.Redacted())
 
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -114,6 +118,9 @@ func FetchHTTP(client *http.Client, token string, authMode string, logger log.Lo
 		select {
 		case apiRequestSlots <- struct{}{}:
 			timer.Stop()
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
 		case <-timer.C:
 			return nil, fmt.Errorf("timeout waiting for an API request slot")
 		}

@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -43,7 +44,7 @@ type externalDurationsCollector struct {
 	cache      ttlCache[wakatimeExternalDurations]
 	cacheTTL   time.Duration
 	uri        url.URL
-	fetchStat  func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat  func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger     log.Logger
 }
 
@@ -113,12 +114,12 @@ func NewExternalDurationsCollector(in CommonInputs, logger log.Logger) (Collecto
 	}, nil
 }
 
-func (c *externalDurationsCollector) Update(ch chan<- prometheus.Metric) error {
+func (c *externalDurationsCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	data, err := c.cache.get(c.cacheTTL, func() (*wakatimeExternalDurations, error) {
 		params := url.Values{}
 		params.Add("date", c.date)
 
-		body, fetchErr := c.fetchStat(c.uri, externalDurationsEndpoint, params)
+		body, fetchErr := c.fetchStat(ctx, c.uri, externalDurationsEndpoint, params)
 		if fetchErr != nil {
 			return nil, fetchErr
 		}

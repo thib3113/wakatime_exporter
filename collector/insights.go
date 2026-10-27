@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -63,7 +64,7 @@ type insightsCollector struct {
 	top            int
 	minSeconds     float64
 	uri            url.URL
-	fetchStat      func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat      func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger         log.Logger
 
 	cache keyedTTLCache[wakatimeInsights]
@@ -144,12 +145,12 @@ func NewInsightsCollector(in CommonInputs, logger log.Logger) (Collector, error)
 	}, nil
 }
 
-func (c *insightsCollector) Update(ch chan<- prometheus.Metric) error {
+func (c *insightsCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	emitted := false
 	var firstErr error
 
 	for _, insightType := range c.types {
-		data, err := c.getInsight(insightType)
+		data, err := c.getInsight(ctx, insightType)
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -171,9 +172,9 @@ func (c *insightsCollector) Update(ch chan<- prometheus.Metric) error {
 	return ErrNoData
 }
 
-func (c *insightsCollector) getInsight(insightType string) (*wakatimeInsights, error) {
+func (c *insightsCollector) getInsight(ctx context.Context, insightType string) (*wakatimeInsights, error) {
 	return c.cache.getWithTTL(insightType, func() (*wakatimeInsights, time.Duration, error) {
-		body, fetchErr := c.fetchStat(c.uri, insightsEndpoint+"/"+insightType+"/"+c.rangeName, url.Values{})
+		body, fetchErr := c.fetchStat(ctx, c.uri, insightsEndpoint+"/"+insightType+"/"+c.rangeName, url.Values{})
 		if fetchErr != nil {
 			return nil, 0, fetchErr
 		}

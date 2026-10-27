@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"io"
 	"net/url"
 
@@ -33,7 +34,7 @@ const (
 type leaderCollector struct {
 	rank      *prometheus.Desc
 	uri       url.URL
-	fetchStat func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger    log.Logger
 }
 
@@ -55,11 +56,11 @@ func NewLeaderCollector(in CommonInputs, logger log.Logger) (Collector, error) {
 	}, nil
 }
 
-func (c *leaderCollector) Update(ch chan<- prometheus.Metric) error {
+func (c *leaderCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	params := url.Values{}
 	params.Add("cache", "false")
 
-	body, fetchErr := c.fetchStat(c.uri, leaderEndpoint, params)
+	body, fetchErr := c.fetchStat(ctx, c.uri, leaderEndpoint, params)
 	if fetchErr != nil {
 		return fetchErr
 	}

@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sort"
@@ -164,7 +165,6 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 	gatherers := prometheus.Gatherers{r}
 	opts := promhttp.HandlerOpts{
 		ErrorHandling: promhttp.ContinueOnError,
-		Timeout:       30 * time.Second,
 	}
 	if h.includeExporterMetrics {
 		gatherers = prometheus.Gatherers{h.exporterMetricsRegistry, r}
@@ -178,5 +178,16 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 			h.exporterMetricsRegistry, handler,
 		)
 	}
-	return handler, nil
+
+	var scrapeMu sync.Mutex
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		scrapeMu.Lock()
+		defer scrapeMu.Unlock()
+
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		nc.SetContext(ctx)
+		defer nc.SetContext(nil)
+		handler.ServeHTTP(w, r)
+	}), nil
 }

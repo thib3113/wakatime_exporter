@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -73,7 +74,7 @@ type statsCollector struct {
 	minSeconds float64
 	filter     *nameFilter
 	uri        url.URL
-	fetchStat  func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat  func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger     log.Logger
 
 	cache keyedTTLCache[wakatimeStatsData]
@@ -310,13 +311,13 @@ func (c *statsCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect implements prometheus.Collector.
 func (c *statsCollector) Collect(ch chan<- prometheus.Metric) {
-	if err := c.Update(ch); err != nil && !isNoDataError(err) {
+	if err := c.UpdateContext(context.Background(), ch); err != nil && !isNoDataError(err) {
 		level.Error(c.logger).Log("msg", "stats collector failed", "err", err)
 	}
 }
 
-func (c *statsCollector) Update(ch chan<- prometheus.Metric) error {
-	data, err := c.getStats()
+func (c *statsCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
+	data, err := c.getStats(ctx)
 	if err != nil {
 		return err
 	}
@@ -325,9 +326,9 @@ func (c *statsCollector) Update(ch chan<- prometheus.Metric) error {
 	return nil
 }
 
-func (c *statsCollector) getStats() (*wakatimeStatsData, error) {
+func (c *statsCollector) getStats(ctx context.Context) (*wakatimeStatsData, error) {
 	return c.cache.getWithTTL("stats", func() (*wakatimeStatsData, time.Duration, error) {
-		body, fetchErr := c.fetchStat(c.uri, statsEndpoint+"/"+c.rangeName, url.Values{})
+		body, fetchErr := c.fetchStat(ctx, c.uri, statsEndpoint+"/"+c.rangeName, url.Values{})
 		if fetchErr != nil {
 			return nil, 0, fetchErr
 		}

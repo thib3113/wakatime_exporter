@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"io"
 	"net/url"
 	"strings"
@@ -96,7 +97,7 @@ func TestStatsCollector(t *testing.T) {
 	}
 
 	calls := 0
-	collector.(*statsCollector).fetchStat = func(url.URL, string, url.Values) (io.ReadCloser, error) {
+	collector.(*statsCollector).fetchStat = func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error) {
 		calls++
 		return io.NopCloser(strings.NewReader(statsTestJSON)), nil
 	}

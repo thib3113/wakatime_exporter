@@ -16,6 +16,7 @@ limitations under the License.
 package collector
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -61,7 +62,7 @@ type privateLeaderboardsCollector struct {
 	cache     ttlCache[privateLeaderboardSnapshot]
 	cacheTTL  time.Duration
 	uri       url.URL
-	fetchStat func(url.URL, string, url.Values) (io.ReadCloser, error)
+	fetchStat func(context.Context, url.URL, string, url.Values) (io.ReadCloser, error)
 	logger    log.Logger
 }
 
@@ -130,8 +131,10 @@ func NewPrivateLeaderboardsCollector(in CommonInputs, logger log.Logger) (Collec
 	}, nil
 }
 
-func (c *privateLeaderboardsCollector) Update(ch chan<- prometheus.Metric) error {
-	snapshot, err := c.cache.get(c.cacheTTL, c.fetchSnapshot)
+func (c *privateLeaderboardsCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
+	snapshot, err := c.cache.get(c.cacheTTL, func() (*privateLeaderboardSnapshot, error) {
+		return c.fetchSnapshot(ctx)
+	})
 	if err != nil {
 		return err
 	}
@@ -178,12 +181,12 @@ func (c *privateLeaderboardsCollector) Update(ch chan<- prometheus.Metric) error
 	return nil
 }
 
-func (c *privateLeaderboardsCollector) fetchSnapshot() (*privateLeaderboardSnapshot, error) {
+func (c *privateLeaderboardsCollector) fetchSnapshot(ctx context.Context) (*privateLeaderboardSnapshot, error) {
 	boards, err := paginate(c.maxPages, func(page int) ([]wakatimePrivateLeaderboard, int, error) {
 		params := url.Values{}
 		params.Set("page", strconv.Itoa(page))
 
-		body, fetchErr := c.fetchStat(c.uri, privateLeaderboardsEndpoint, params)
+		body, fetchErr := c.fetchStat(ctx, c.uri, privateLeaderboardsEndpoint, params)
 		if fetchErr != nil {
 			return nil, 0, fetchErr
 		}
@@ -226,7 +229,7 @@ func (c *privateLeaderboardsCollector) fetchSnapshot() (*privateLeaderboardSnaps
 				params.Set("board_type", boardType)
 				params.Set("page", strconv.Itoa(page))
 
-				leadersBody, fetchErr := c.fetchStat(c.uri, privateLeaderboardsEndpoint+"/"+board.ID, params)
+				leadersBody, fetchErr := c.fetchStat(ctx, c.uri, privateLeaderboardsEndpoint+"/"+board.ID, params)
 				if fetchErr != nil {
 					return nil, 0, fetchErr
 				}
