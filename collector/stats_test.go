@@ -84,6 +84,23 @@ const statsTestJSON = `{
   }
 }`
 
+// statsCollectorAdapter exposes a statsCollector to a prometheus.Registry,
+// mirroring how WakaCollector drives UpdateContext with the scrape context.
+// Production code never registers the collector directly.
+type statsCollectorAdapter struct {
+	c *statsCollector
+}
+
+func (a statsCollectorAdapter) Describe(ch chan<- *prometheus.Desc) {
+	a.c.Describe(ch)
+}
+
+func (a statsCollectorAdapter) Collect(ch chan<- prometheus.Metric) {
+	if err := a.c.UpdateContext(context.Background(), ch); err != nil && !isNoDataError(err) {
+		panic(err)
+	}
+}
+
 func TestStatsCollector(t *testing.T) {
 	collector, err := NewStatsCollector(CommonInputs{
 		Config: Config{Stats: StatsConfig{
@@ -103,7 +120,7 @@ func TestStatsCollector(t *testing.T) {
 	}
 
 	registry := prometheus.NewPedanticRegistry()
-	registry.MustRegister(collector.(*statsCollector))
+	registry.MustRegister(statsCollectorAdapter{collector.(*statsCollector)})
 
 	families, err := registry.Gather()
 	if err != nil {

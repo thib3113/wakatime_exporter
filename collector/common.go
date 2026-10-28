@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,6 +33,7 @@ import (
 
 	"github.com/go-kit/kit/log"
 	"github.com/go-kit/kit/log/level"
+	"github.com/prometheus/common/version"
 )
 
 // Auth modes supported by FetchHTTP.
@@ -43,6 +45,124 @@ const (
 
 // OAuthTokenPrefix is the prefix identifying a WakaTime OAuth access token.
 const OAuthTokenPrefix = "waka_tok_"
+
+// userAgentProduct identifies the exporter in WakaTime request logs.
+const userAgentProduct = "wakatime-exporter"
+
+// repositoryURL is the public project repository.
+const repositoryURL = "https://github.com/thib3113/wakatime_exporter"
+
+// maxTokenLen caps every token embedded in the User-Agent, so neither the
+// build version nor an inbound scraper value can bloat the header.
+const maxTokenLen = 32
+
+// formatUserAgent builds the RFC 9110 "product/version (comment)" form so
+// requests are attributable to this exporter, its version and platform, and
+// clearly identified as a Prometheus exporter rather than an IDE plugin.
+// scraper, when non-empty, names the scraper that triggered the request; it
+// must already be reduced by scraperToken.
+func formatUserAgent(v string, scraper string) string {
+	v = sanitizeToken(strings.TrimPrefix(v, "v"))
+	if v == "" {
+		v = "dev"
+	}
+	comment := "Prometheus exporter"
+	if scraper != "" {
+		comment += "; scraper=" + scraper
+	}
+	return fmt.Sprintf("%s/%s (%s; %s %s/%s; +%s)",
+		userAgentProduct, v, comment, runtime.Version(), runtime.GOOS, runtime.GOARCH, repositoryURL)
+}
+
+// userAgent is the default User-Agent, resolved once: the build version is
+// fixed at link time and the platform cannot change at runtime, so there is
+// nothing to recompute per request.
+var userAgent = formatUserAgent(version.Version, "")
+
+// knownScrapers maps a lowercased User-Agent product to its canonical name.
+// Anything else is dropped: inbound values are client-controlled and must
+// never be forwarded verbatim to a third party.
+var knownScrapers = map[string]string{
+	"prometheus":      "Prometheus",
+	"thanos":          "Thanos",
+	"cortex":          "Cortex",
+	"mimir":           "Mimir",
+	"vmagent":         "vmagent",
+	"vm_promscrape":   "vmagent",
+	"grafanaagent":    "GrafanaAgent",
+	"grafana-agent":   "GrafanaAgent",
+	"alloy":           "Alloy",
+	"victoriametrics": "VictoriaMetrics",
+}
+
+// scraperToken reduces a scraper User-Agent to a compact, allowlisted
+// "Product/version" token, or "" when the scraper is not recognised. The
+// version is capped and truncated at the first character outside
+// [A-Za-z0-9._+-], so no arbitrary input (CRLF, spaces, quotes) can reach the
+// outbound header.
+func scraperToken(ua string) string {
+	token := strings.TrimSpace(ua)
+	if i := strings.IndexAny(token, " \t"); i >= 0 {
+		token = token[:i]
+	}
+	if token == "" {
+		return ""
+	}
+	name, ver, _ := strings.Cut(token, "/")
+	canonical, known := knownScrapers[strings.ToLower(name)]
+	if !known {
+		return ""
+	}
+	ver = sanitizeToken(ver)
+	if ver == "" {
+		return canonical
+	}
+	return canonical + "/" + ver
+}
+
+// sanitizeToken keeps the leading run of [A-Za-z0-9._+-] characters, capped at
+// maxTokenLen, and drops everything from the first invalid character onwards.
+func sanitizeToken(token string) string {
+	var b strings.Builder
+	for _, r := range token {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
+			r == '.', r == '_', r == '-', r == '+':
+			if b.Len() == maxTokenLen {
+				return b.String()
+			}
+			b.WriteRune(r)
+		default:
+			return b.String()
+		}
+	}
+	return b.String()
+}
+
+type scrapeUserAgentKey struct{}
+
+// WithScrapeUserAgent records the scraper User-Agent for the duration of one
+// scrape, so outbound WakaTime requests can name the scraper that triggered
+// them. It reports false when the User-Agent is empty or not recognised, in
+// which case the context is returned unchanged.
+func WithScrapeUserAgent(ctx context.Context, ua string) (context.Context, bool) {
+	scraper := scraperToken(ua)
+	if scraper == "" {
+		return ctx, false
+	}
+	return context.WithValue(ctx, scrapeUserAgentKey{}, formatUserAgent(version.Version, scraper)), true
+}
+
+// userAgentFor returns the User-Agent to use for a request: the cached default
+// unless the current scrape recorded an allowlisted scraper.
+func userAgentFor(ctx context.Context) string {
+	if ctx != nil {
+		if ua, ok := ctx.Value(scrapeUserAgentKey{}).(string); ok && ua != "" {
+			return ua
+		}
+	}
+	return userAgent
+}
 
 // EffectiveAuthMode resolves the auth mode actually used for requests:
 // an explicit "bearer"/"basic" mode wins, "auto" (or any unknown value)
@@ -106,9 +226,8 @@ func FetchHTTP(client *http.Client, token string, authMode string, logger log.Lo
 			return nil, err
 		}
 
-		req.Header = map[string][]string{
-			"Authorization": {authHeader},
-		}
+		req.Header.Set("Authorization", authHeader)
+		req.Header.Set("User-Agent", userAgentFor(ctx))
 
 		if until := rateLimitUntil.Load(); until > 0 && time.Now().Unix() < until {
 			return nil, fmt.Errorf("rate limited by WakaTime until %s", time.Unix(until, 0).UTC().Format(time.RFC3339))

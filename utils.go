@@ -186,6 +186,11 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
+		var known bool
+		ctx, known = collector.WithScrapeUserAgent(ctx, r.UserAgent())
+		if !known {
+			level.Debug(h.logger).Log("msg", "scrape User-Agent not recognised; not forwarded to WakaTime")
+		}
 		nc.SetContext(ctx)
 		defer nc.SetContext(nil)
 		handler.ServeHTTP(w, r)

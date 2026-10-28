@@ -14,6 +14,13 @@ as companion services alongside the traditional Wakatime web application.
 This could be anything from including some of your coding statistics in Grafana,
 to forecasting your coding time with prophet.
 
+> [!WARNING]
+> **WakaTime.com: Basic auth stops working on 2026-11-01.** Classic API keys become
+> write-only, so they can no longer read stats, summaries, goals or organizations.
+> Set `WAKA_API_KEY` to an OAuth token (`waka_tok_...`) instead; `--wakatime.auth-mode=auto`
+> (the default) selects Bearer automatically. Basic auth remains supported for
+> self-hosted equivalents, which do not follow this change.
+
 > **Actively maintained**: this repository ([thib3113/wakatime_exporter](https://github.com/thib3113/wakatime_exporter))
 > continues the project [MacroPower/wakatime_exporter](https://github.com/MacroPower/wakatime_exporter),
 > which appears unmaintained (last upstream commit: February 2023).
@@ -21,7 +28,7 @@ to forecasting your coding time with prophet.
 > Many thanks to Jacob Colvin (MacroPower) for creating the project and maintaining it up to v0.1.0 —
 > all of his work is preserved as-is, including the full git history and the original license headers.
 > On top of upstream, this repository adds:
-> OAuth 2.0 Bearer authentication (required since WakaTime API keys become write-only on 2026-11-01),
+> OAuth 2.0 Bearer authentication,
 > a new `ai` collector exposing AI coding statistics from the `/durations` endpoint,
 > a `stats` collector exposing range totals (including all-time per-project totals)
 > from the `/stats/{range}` endpoint, and additional collectors for AI breakdowns,
@@ -38,7 +45,8 @@ to forecasting your coding time with prophet.
 
 ## Usage
 
-In most cases, you should only need to provide an API key.
+In most cases, you should only need to provide a credential
+(an OAuth token, or a classic API key for self-hosted equivalents).
 All other parameters are for advanced use-cases only
 and you should be able to leave them set to their defaults.
 
@@ -73,10 +81,10 @@ Flags:
   --wakatime.scrape-uri="https://wakatime.com/api/v1"
                                  Base path to query for Wakatime data.
   --wakatime.user="current"      User to query for Wakatime data.
-  --wakatime.api-key             Token to use when getting stats from Wakatime. Accepts a classic API key (Basic auth)
-                                 or a WakaTime OAuth access token (Bearer auth, waka_tok_...).
+  --wakatime.api-key             Token to use when getting stats from Wakatime: a WakaTime OAuth access token
+                                 (Bearer auth, waka_tok_...) or, for self-hosted equivalents, a classic API key (Basic auth).
   --wakatime.auth-mode="auto"    Auth mode for the Wakatime API: auto (Bearer for waka_tok_ tokens, Basic otherwise),
-                                 basic, or bearer.
+                                 basic, or bearer. Basic is only for self-hosted equivalents.
   --wakatime.timeout=5s          Timeout for trying to get stats from Wakatime.
   --wakatime.ssl-verify          Flag that enables SSL certificate verification for the scrape URI.
   --stats.range="all_time"           Time range for the stats collector: all_time, last_7_days, last_30_days,
@@ -225,18 +233,20 @@ $env:WAKA_API_KEY="YOUR_API_KEY"; docker compose up
 
 ## Authentication
 
-`--wakatime.api-key` (`WAKA_API_KEY`) accepts either a classic Wakatime API key
-(Basic auth, e.g. for self-hosted [wakapi](https://github.com/muety/wakapi))
-or a WakaTime OAuth access token (`waka_tok_...`, `Authorization: Bearer`).
+`--wakatime.api-key` (`WAKA_API_KEY`) accepts a WakaTime OAuth access token
+(`waka_tok_...`, `Authorization: Bearer`) or, for self-hosted equivalents only,
+a classic Wakatime API key (Basic auth).
 
 `--wakatime.auth-mode` (`WAKA_AUTH_MODE`, default `auto`) selects the scheme:
 `auto` uses `Bearer` for `waka_tok_` tokens and `Basic` otherwise;
-`basic` / `bearer` force the mode (useful for testing and unprefixed tokens).
+`basic` / `bearer` force the mode (useful for testing, unprefixed tokens, and
+self-hosted equivalents).
 
 For personal use (your own account), grab a ready-made OAuth token at
 https://wakatime.com/oauth ("Your secret OAuth token") — no app to register.
 It can read your email, summaries, stats, goals, organizations, and coding
-activity, so keep it secret and prefer it over your API key, which is write-only.
+activity, so keep it secret and prefer it over your API key, which becomes
+write-only.
 
 To get an OAuth token for other users, register an app at https://wakatime.com/apps
 (see https://wakatime.com/developers#authentication) with at least the scopes

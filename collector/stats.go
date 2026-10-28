@@ -309,13 +309,6 @@ func (c *statsCollector) Describe(ch chan<- *prometheus.Desc) {
 	}
 }
 
-// Collect implements prometheus.Collector.
-func (c *statsCollector) Collect(ch chan<- prometheus.Metric) {
-	if err := c.UpdateContext(context.Background(), ch); err != nil && !isNoDataError(err) {
-		level.Error(c.logger).Log("msg", "stats collector failed", "err", err)
-	}
-}
-
 func (c *statsCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Metric) error {
 	data, err := c.getStats(ctx)
 	if err != nil {

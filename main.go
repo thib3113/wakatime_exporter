@@ -121,12 +121,12 @@ func main() {
 
 		wakaToken = kingpin.Flag(
 			"wakatime.api-key",
-			"Token to use when getting stats from Wakatime. Accepts a classic API key (Basic auth) or a WakaTime OAuth access token (Bearer auth, waka_tok_...).",
+			"Token to use when getting stats from Wakatime: a WakaTime OAuth access token (Bearer auth, waka_tok_...) or, for self-hosted equivalents, a classic API key (Basic auth).",
 		).Required().Envar("WAKA_API_KEY").String()
 
 		wakaAuthMode = kingpin.Flag(
 			"wakatime.auth-mode",
-			"Auth mode for the Wakatime API: auto (Bearer for waka_tok_ tokens, Basic otherwise), basic, or bearer.",
+			"Auth mode for the Wakatime API: auto (Bearer for waka_tok_ tokens, Basic otherwise), basic, or bearer. Basic is only for self-hosted equivalents.",
 		).Default("auto").Envar("WAKA_AUTH_MODE").Enum("auto", "basic", "bearer")
 
 		wakaTimeout = kingpin.Flag(
