@@ -235,6 +235,7 @@ func (c *aiBreakdownCollector) emit(ch chan<- prometheus.Metric, dimension strin
 		aggregate := entry.aggregate
 		ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.GaugeValue, float64(aggregate.inputTokens), dimension, name, "input")
 		ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.GaugeValue, float64(aggregate.outputTokens), dimension, name, "output")
+		ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.GaugeValue, float64(aggregate.cachedInputTokens), dimension, name, "cached_input")
 		for _, model := range sortedCostModels(aggregate.costs) {
 			ch <- prometheus.MustNewConstMetric(c.costUSD, prometheus.GaugeValue, aggregate.costs[model], dimension, name, model)
 		}
@@ -281,5 +282,5 @@ func aiBreakdownValue(duration wakatimeDurationEntry, dimension string) string {
 }
 
 func aiBreakdownTotalTokens(aggregate *aiTotals) int64 {
-	return aggregate.inputTokens + aggregate.outputTokens
+	return aggregate.inputTokens + aggregate.outputTokens + aggregate.cachedInputTokens
 }

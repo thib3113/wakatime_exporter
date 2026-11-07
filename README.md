@@ -278,7 +278,9 @@ exposes AI coding statistics:
 | Metric                                    | Type    | Labels                  | Description                                              |
 |-------------------------------------------|---------|-------------------------|----------------------------------------------------------|
 | `wakatime_ai_lines_total`                 | counter | `origin` (`ai`/`human`), `kind` (`additions`/`deletions`) | Lines written by AI vs. typed by a human |
-| `wakatime_ai_tokens_total`                | counter | `kind` (`input`/`output`) | AI tokens consumed / produced                          |
+| `wakatime_ai_tokens_total`                | counter | `kind` (`input`/`output`/`cached_input`) | AI tokens consumed / produced / cached                   |
+| `wakatime_ai_model_tokens_total`          | counter | `model`, `kind` (`input`/`output`/`cached_input`) | AI tokens consumed per model                       |
+| `wakatime_ai_model_lines_total`           | counter | `model`                 | Lines of code attributed to each AI model                |
 | `wakatime_ai_cost_usd_total`              | counter | `model`                 | Estimated AI cost in USD according to WakaTime pricing   |
 | `wakatime_ai_sessions_total`              | counter | –                       | Sum of per-duration AI sessions (may double-count overlapping sessions)                                     |
 | `wakatime_ai_prompt_events_total`         | counter | –                       | Prompts sent to AI tools                                 |
@@ -324,12 +326,18 @@ and retries after one minute.
 | `wakatime_stats_operating_system_seconds`   | gauge | `range`, `name`              | Seconds per operating system |
 | `wakatime_stats_machine_seconds`            | gauge | `range`, `id`, `name`        | Seconds per machine |
 | `wakatime_stats_dependency_seconds`         | gauge | `range`, `name`              | Seconds per dependency |
-| `wakatime_stats_ai_tokens`                  | gauge | `range`, `kind`              | AI tokens used (`input`/`output`) |
+| `wakatime_stats_ai_tokens`                  | gauge | `range`, `kind`              | AI tokens used (`input`/`output`/`cached_input`) |
 | `wakatime_stats_ai_cost_usd`                | gauge | `range`, `model`             | Estimated AI cost in USD according to WakaTime pricing |
 | `wakatime_stats_ai_lines`                   | gauge | `range`, `origin`, `kind`    | Lines attributed to AI vs human |
 | `wakatime_stats_ai_model_lines`             | gauge | `range`, `model`             | Lines added/removed by each AI model |
 | `wakatime_stats_ai_sessions`                | gauge | `range`                      | Distinct AI sessions for the configured range |
 | `wakatime_stats_ai_prompt_events`           | gauge | `range`                      | Prompts sent to AI tools |
+| `wakatime_stats_ai_prompt_events_avg_per_session` | gauge | `range`                | Average prompts sent to AI tools per session |
+| `wakatime_stats_ai_prompt_events_median_per_session` | gauge | `range`             | Median prompts sent to AI tools per session |
+| `wakatime_stats_ai_prompt_length_avg_chars` | gauge | `range`                      | Average prompt length in characters |
+| `wakatime_stats_ai_prompt_length_avg_chars_per_session` | gauge | `range`          | Average prompt length in characters per session |
+| `wakatime_stats_ai_prompt_length_median_chars_per_session` | gauge | `range`       | Median prompt length in characters per session |
+| `wakatime_stats_ai_line_changes_total`      | gauge | `range`                      | Total AI line changes (additions + deletions) |
 | `wakatime_stats_project_ai_tokens`          | gauge | `range`, `name`, `kind`      | AI tokens per project |
 | `wakatime_stats_project_ai_cost_usd`        | gauge | `range`, `name`, `model`     | Estimated AI cost per project in USD according to WakaTime pricing |
 | `wakatime_stats_project_ai_lines`           | gauge | `range`, `name`, `origin`, `kind` | Lines attributed to AI vs human per project |
@@ -372,7 +380,7 @@ dimension and exposes AI usage for that dimension.
 
 | Metric | Labels | Description |
 |--------|--------|-------------|
-| `wakatime_ai_breakdown_tokens` | `slice`, `name`, `kind` | AI tokens (`input`/`output`) |
+| `wakatime_ai_breakdown_tokens` | `slice`, `name`, `kind` | AI tokens (`input`/`output`/`cached_input`) |
 | `wakatime_ai_breakdown_cost_usd` | `slice`, `name`, `model` | Estimated AI cost in USD according to WakaTime pricing |
 | `wakatime_ai_breakdown_lines` | `slice`, `name`, `origin`, `kind` | Lines attributed to AI vs human |
 | `wakatime_ai_breakdown_sessions` | `slice`, `name` | Sum of per-duration AI sessions (may double-count overlapping sessions) |

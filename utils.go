@@ -17,9 +17,11 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -195,4 +197,32 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 		defer nc.SetContext(nil)
 		handler.ServeHTTP(w, r)
 	}), nil
+}
+
+// loadDotEnv parses a simple KEY=VALUE format .env file and sets environment
+// variables for keys that are not already present in the environment.
+// Comments (#) and blank lines are ignored. Enclosing quotes (" or ') are stripped.
+func loadDotEnv(filepath string) {
+	f, err := os.Open(filepath)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		k := strings.TrimSpace(parts[0])
+		v := strings.TrimSpace(parts[1])
+		if len(v) >= 2 && ((v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'')) {
+			v = v[1 : len(v)-1]
+		}
+		if _, exists := os.LookupEnv(k); !exists && k != "" {
+			_ = os.Setenv(k, v)
+		}
+	}
 }

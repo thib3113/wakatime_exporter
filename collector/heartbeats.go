@@ -51,11 +51,12 @@ type heartbeatsCollector struct {
 }
 
 type heartbeatAggregate struct {
-	count    int64
-	writes   int64
-	input    int64
-	output   int64
-	sessions map[string]struct{}
+	count       int64
+	writes      int64
+	input       int64
+	output      int64
+	cachedInput int64
+	sessions    map[string]struct{}
 }
 
 func init() {
@@ -155,6 +156,7 @@ func (c *heartbeatsCollector) UpdateContext(ctx context.Context, ch chan<- prome
 		}
 		aggregate.input += heartbeat.AIInputTokens
 		aggregate.output += heartbeat.AIOutputTokens
+		aggregate.cachedInput += heartbeat.AICachedInputTokens
 		if heartbeat.AISession != "" {
 			aggregate.sessions[heartbeat.AISession] = struct{}{}
 		}
@@ -203,6 +205,7 @@ func (c *heartbeatsCollector) UpdateContext(ctx context.Context, ch chan<- prome
 		ch <- prometheus.MustNewConstMetric(c.writes, prometheus.GaugeValue, float64(entry.aggregate.writes), entry.project)
 		ch <- prometheus.MustNewConstMetric(c.aiTokens, prometheus.GaugeValue, float64(entry.aggregate.input), entry.project, "input")
 		ch <- prometheus.MustNewConstMetric(c.aiTokens, prometheus.GaugeValue, float64(entry.aggregate.output), entry.project, "output")
+		ch <- prometheus.MustNewConstMetric(c.aiTokens, prometheus.GaugeValue, float64(entry.aggregate.cachedInput), entry.project, "cached_input")
 		ch <- prometheus.MustNewConstMetric(c.aiSessions, prometheus.GaugeValue, float64(len(entry.aggregate.sessions)), entry.project)
 	}
 

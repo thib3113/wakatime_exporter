@@ -45,7 +45,11 @@ const statsTestJSON = `{
     ],
     "ai_input_tokens": 2000,
     "ai_output_tokens": 800,
+    "ai_cached_input_tokens": 1500,
     "ai_prompt_events_total": 9,
+    "ai_prompt_events_avg_per_session": 4.5,
+    "ai_prompt_length_avg": 350.5,
+    "ai_line_changes_total": 500,
     "ai_sessions": 50,
     "is_up_to_date": true,
     "range": "all_time",
@@ -64,6 +68,7 @@ const statsTestJSON = `{
         "total_seconds": 432000,
         "ai_input_tokens": 1234,
         "ai_output_tokens": 567,
+        "ai_cached_input_tokens": 890,
         "ai_prompt_events_total": 7,
         "ai_sessions": 42,
         "ai_model_costs": {"model-alpha": 1.25}
@@ -135,6 +140,16 @@ func TestStatsCollector(t *testing.T) {
 		map[string]string{"range": "all_time", "name": "example-project", "kind": "input"})
 	assertGauge(t, families, "wakatime_stats_project_ai_tokens", 567,
 		map[string]string{"range": "all_time", "name": "example-project", "kind": "output"})
+	assertGauge(t, families, "wakatime_stats_project_ai_tokens", 890,
+		map[string]string{"range": "all_time", "name": "example-project", "kind": "cached_input"})
+	assertGauge(t, families, "wakatime_stats_ai_tokens", 1500,
+		map[string]string{"range": "all_time", "kind": "cached_input"})
+	assertGauge(t, families, "wakatime_stats_ai_prompt_events_avg_per_session", 4.5,
+		map[string]string{"range": "all_time"})
+	assertGauge(t, families, "wakatime_stats_ai_prompt_length_avg_chars", 350.5,
+		map[string]string{"range": "all_time"})
+	assertGauge(t, families, "wakatime_stats_ai_line_changes_total", 500,
+		map[string]string{"range": "all_time"})
 	assertGauge(t, families, "wakatime_stats_best_day_seconds", 36000,
 		map[string]string{"range": "all_time", "date": "2026-01-15"})
 	assertGauge(t, families, "wakatime_stats_days", 10,

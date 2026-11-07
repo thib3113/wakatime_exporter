@@ -15,21 +15,34 @@ limitations under the License.
 
 package collector
 
+type aiModelTotals struct {
+	inputTokens       int64
+	outputTokens      int64
+	cachedInputTokens int64
+	lines             int64
+	cost              float64
+}
+
 type aiTotals struct {
-	additions       int64
-	deletions       int64
-	humanAdditions  int64
-	humanDeletions  int64
-	inputTokens     int64
-	outputTokens    int64
-	sessions        int64
-	promptEvents    int64
-	promptLengthSum float64
-	costs           map[string]float64
+	additions         int64
+	deletions         int64
+	humanAdditions    int64
+	humanDeletions    int64
+	inputTokens       int64
+	outputTokens      int64
+	cachedInputTokens int64
+	sessions          int64
+	promptEvents      int64
+	promptLengthSum   float64
+	costs             map[string]float64
+	models            map[string]*aiModelTotals
 }
 
 func newAITotals() *aiTotals {
-	return &aiTotals{costs: map[string]float64{}}
+	return &aiTotals{
+		costs:  map[string]float64{},
+		models: map[string]*aiModelTotals{},
+	}
 }
 
 func (a *aiTotals) addDuration(duration wakatimeDurationEntry) {
@@ -39,10 +52,26 @@ func (a *aiTotals) addDuration(duration wakatimeDurationEntry) {
 	a.humanDeletions += duration.HumanDeletions
 	a.inputTokens += duration.AIInputTokens
 	a.outputTokens += duration.AIOutputTokens
+	a.cachedInputTokens += duration.AICachedInputTokens
 	a.sessions += duration.AISessions
 	a.promptEvents += duration.AIPromptEventsTotal
 	a.promptLengthSum += duration.AIPromptLengthSum
 	for model, cost := range duration.AIModelCosts {
 		a.costs[model] += cost
+	}
+	for _, m := range duration.AIModelBreakdown {
+		if m.Name == "" {
+			continue
+		}
+		mt, ok := a.models[m.Name]
+		if !ok {
+			mt = &aiModelTotals{}
+			a.models[m.Name] = mt
+		}
+		mt.inputTokens += m.InputTokens
+		mt.outputTokens += m.OutputTokens
+		mt.cachedInputTokens += m.CachedInputTokens
+		mt.lines += m.Lines
+		mt.cost += m.Cost
 	}
 }

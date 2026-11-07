@@ -45,10 +45,12 @@ type wakatimeDurationEntry struct {
 	HumanAdditions int64 `json:"human_additions"`
 	HumanDeletions int64 `json:"human_deletions"`
 
-	AIInputTokens  int64 `json:"ai_input_tokens"`
-	AIOutputTokens int64 `json:"ai_output_tokens"`
+	AIInputTokens       int64 `json:"ai_input_tokens"`
+	AIOutputTokens      int64 `json:"ai_output_tokens"`
+	AICachedInputTokens int64 `json:"ai_cached_input_tokens"`
 
-	AIModelCosts map[string]float64 `json:"ai_model_costs"`
+	AIModelCosts     map[string]float64        `json:"ai_model_costs"`
+	AIModelBreakdown []wakatimeDurationAIModel `json:"ai_model_breakdown"`
 
 	AISessions                     int64   `json:"ai_sessions"`
 	AIPromptEventsTotal            int64   `json:"ai_prompt_events_total"`
@@ -59,4 +61,13 @@ type wakatimeDurationEntry struct {
 	AIPromptLengthAvgPerSession    float64 `json:"ai_prompt_length_avg_per_session"`
 	AIPromptLengthMedianPerSession float64 `json:"ai_prompt_length_median_per_session"`
 	AIPromptLengthSum              float64 `json:"ai_prompt_length_sum"`
+}
+
+type wakatimeDurationAIModel struct {
+	Name              string  `json:"name"`
+	InputTokens       int64   `json:"input_tokens"`
+	OutputTokens      int64   `json:"output_tokens"`
+	CachedInputTokens int64   `json:"cached_input_tokens"`
+	Cost              float64 `json:"cost"`
+	Lines             int64   `json:"lines"`
 }

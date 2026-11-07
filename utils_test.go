@@ -19,6 +19,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -110,5 +112,37 @@ func TestScrapeUserAgentReachesUpstream(t *testing.T) {
 		if !strings.Contains(ua, "; scraper=Prometheus/2.53.0;") {
 			t.Fatalf("upstream User-Agent = %q, want scraper=Prometheus/2.53.0", ua)
 		}
+	}
+}
+
+func TestLoadDotEnv(t *testing.T) {
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, ".env")
+	content := `# Comment line
+TEST_KEY_UNQUOTED=my_val
+TEST_KEY_QUOTED="quoted_val"
+TEST_KEY_SINGLE='single_val'
+# Already existing
+TEST_KEY_EXISTING=new_val
+`
+	if err := os.WriteFile(envPath, []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	t.Setenv("TEST_KEY_EXISTING", "original_val")
+
+	loadDotEnv(envPath)
+
+	if got := os.Getenv("TEST_KEY_UNQUOTED"); got != "my_val" {
+		t.Fatalf("TEST_KEY_UNQUOTED = %q, want my_val", got)
+	}
+	if got := os.Getenv("TEST_KEY_QUOTED"); got != "quoted_val" {
+		t.Fatalf("TEST_KEY_QUOTED = %q, want quoted_val", got)
+	}
+	if got := os.Getenv("TEST_KEY_SINGLE"); got != "single_val" {
+		t.Fatalf("TEST_KEY_SINGLE = %q, want single_val", got)
+	}
+	if got := os.Getenv("TEST_KEY_EXISTING"); got != "original_val" {
+		t.Fatalf("TEST_KEY_EXISTING = %q, want original_val", got)
 	}
 }

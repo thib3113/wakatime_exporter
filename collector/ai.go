@@ -34,6 +34,8 @@ const (
 type aiCollector struct {
 	lines             *prometheus.Desc
 	tokens            *prometheus.Desc
+	modelTokens       *prometheus.Desc
+	modelLines        *prometheus.Desc
 	costUSD           *prometheus.Desc
 	sessions          *prometheus.Desc
 	promptEvents      *prometheus.Desc
@@ -64,6 +66,16 @@ func NewAICollector(in CommonInputs, logger log.Logger) (Collector, error) {
 			prometheus.BuildFQName(namespace, aiSubsystem, "tokens_total"),
 			"Total AI tokens used, from Wakatime durations.",
 			[]string{"kind"}, nil,
+		),
+		modelTokens: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, aiSubsystem, "model_tokens_total"),
+			"Total AI tokens used per model, from Wakatime durations.",
+			[]string{"model", "kind"}, nil,
+		),
+		modelLines: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, aiSubsystem, "model_lines_total"),
+			"Total AI lines attributed to each model, from Wakatime durations.",
+			[]string{"model"}, nil,
 		),
 		costUSD: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, aiSubsystem, "cost_usd_total"),
@@ -150,6 +162,18 @@ func (c *aiCollector) UpdateContext(ctx context.Context, ch chan<- prometheus.Me
 
 	ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.CounterValue, float64(totals.inputTokens), "input")
 	ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.CounterValue, float64(totals.outputTokens), "output")
+	ch <- prometheus.MustNewConstMetric(c.tokens, prometheus.CounterValue, float64(totals.cachedInputTokens), "cached_input")
+
+	for model, mt := range totals.models {
+		if mt.inputTokens > 0 || mt.outputTokens > 0 || mt.cachedInputTokens > 0 {
+			ch <- prometheus.MustNewConstMetric(c.modelTokens, prometheus.CounterValue, float64(mt.inputTokens), model, "input")
+			ch <- prometheus.MustNewConstMetric(c.modelTokens, prometheus.CounterValue, float64(mt.outputTokens), model, "output")
+			ch <- prometheus.MustNewConstMetric(c.modelTokens, prometheus.CounterValue, float64(mt.cachedInputTokens), model, "cached_input")
+		}
+		if mt.lines > 0 {
+			ch <- prometheus.MustNewConstMetric(c.modelLines, prometheus.CounterValue, float64(mt.lines), model)
+		}
+	}
 
 	models := topNamedValues(totals.costs, c.top, 0)
 	warnDropped(c.logger, "ai", "model", len(totals.costs), len(models))

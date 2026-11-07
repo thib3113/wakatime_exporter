@@ -29,6 +29,7 @@ const aiBreakdownTestJSON = `{
       "duration": 3600,
       "ai_input_tokens": 1500,
       "ai_output_tokens": 500,
+      "ai_cached_input_tokens": 250,
       "ai_sessions": 2,
       "ai_prompt_events_total": 3,
       "ai_prompt_length_sum": 120,
@@ -66,6 +67,8 @@ func TestAIBreakdownCollector(t *testing.T) {
 		map[string]string{"slice": "language", "name": "TypeScript", "kind": "input"})
 	assertGaugeSample(t, samples, "wakatime_ai_breakdown_tokens", 500,
 		map[string]string{"slice": "language", "name": "TypeScript", "kind": "output"})
+	assertGaugeSample(t, samples, "wakatime_ai_breakdown_tokens", 250,
+		map[string]string{"slice": "language", "name": "TypeScript", "kind": "cached_input"})
 	assertGaugeSample(t, samples, "wakatime_ai_breakdown_cost_usd", 0.5,
 		map[string]string{"slice": "language", "name": "TypeScript", "model": "model-alpha"})
 	assertGaugeSample(t, samples, "wakatime_ai_breakdown_sessions", 2,

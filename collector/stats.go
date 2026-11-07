@@ -57,11 +57,17 @@ type statsCollector struct {
 	dependency                 *prometheus.Desc
 	aiTokens                   *prometheus.Desc
 	aiCostUSD                  *prometheus.Desc
-	aiLines                    *prometheus.Desc
-	aiModelLines               *prometheus.Desc
-	aiSessions                 *prometheus.Desc
-	aiPromptEvents             *prometheus.Desc
-	projectAITokens            *prometheus.Desc
+	aiLines                        *prometheus.Desc
+	aiModelLines                   *prometheus.Desc
+	aiSessions                     *prometheus.Desc
+	aiPromptEvents                 *prometheus.Desc
+	aiPromptEventsAvgPerSession    *prometheus.Desc
+	aiPromptEventsMedianPerSession *prometheus.Desc
+	aiPromptLengthAvg              *prometheus.Desc
+	aiPromptLengthAvgPerSession    *prometheus.Desc
+	aiPromptLengthMedianPerSession *prometheus.Desc
+	aiLineChangesTotal             *prometheus.Desc
+	projectAITokens                *prometheus.Desc
 	projectAICostUSD           *prometheus.Desc
 	projectAILines             *prometheus.Desc
 	projectAISessions          *prometheus.Desc
@@ -230,6 +236,36 @@ func NewStatsCollector(in CommonInputs, logger log.Logger) (Collector, error) {
 			"Prompts sent to AI tools for the configured range.",
 			"range",
 		),
+		aiPromptEventsAvgPerSession: newStatsDesc(
+			"ai_prompt_events_avg_per_session",
+			"Average prompts sent to AI tools per session for the configured range.",
+			"range",
+		),
+		aiPromptEventsMedianPerSession: newStatsDesc(
+			"ai_prompt_events_median_per_session",
+			"Median prompts sent to AI tools per session for the configured range.",
+			"range",
+		),
+		aiPromptLengthAvg: newStatsDesc(
+			"ai_prompt_length_avg_chars",
+			"Average prompt length in characters for the configured range.",
+			"range",
+		),
+		aiPromptLengthAvgPerSession: newStatsDesc(
+			"ai_prompt_length_avg_chars_per_session",
+			"Average prompt length in characters per session for the configured range.",
+			"range",
+		),
+		aiPromptLengthMedianPerSession: newStatsDesc(
+			"ai_prompt_length_median_chars_per_session",
+			"Median prompt length in characters per session for the configured range.",
+			"range",
+		),
+		aiLineChangesTotal: newStatsDesc(
+			"ai_line_changes_total",
+			"Total AI line changes (additions and deletions) for the configured range.",
+			"range",
+		),
 		projectAITokens: newStatsDesc(
 			"project_ai_tokens",
 			"AI tokens used per project for the configured range.",
@@ -298,6 +334,12 @@ func (c *statsCollector) Describe(ch chan<- *prometheus.Desc) {
 		c.aiModelLines,
 		c.aiSessions,
 		c.aiPromptEvents,
+		c.aiPromptEventsAvgPerSession,
+		c.aiPromptEventsMedianPerSession,
+		c.aiPromptLengthAvg,
+		c.aiPromptLengthAvgPerSession,
+		c.aiPromptLengthMedianPerSession,
+		c.aiLineChangesTotal,
 		c.projectAITokens,
 		c.projectAICostUSD,
 		c.projectAILines,
@@ -383,6 +425,9 @@ func (c *statsCollector) emit(ch chan<- prometheus.Metric, data *wakatimeStatsDa
 			entry.HumanAdditions != 0 || entry.HumanDeletions != 0 {
 			metric(c.projectAITokens, float64(entry.AIInputTokens), r, entry.Name, "input")
 			metric(c.projectAITokens, float64(entry.AIOutputTokens), r, entry.Name, "output")
+			if entry.AICachedInputTokens != 0 {
+				metric(c.projectAITokens, float64(entry.AICachedInputTokens), r, entry.Name, "cached_input")
+			}
 			for _, model := range sortedCostModels(entry.AIModelCosts) {
 				metric(c.projectAICostUSD, entry.AIModelCosts[model], r, entry.Name, model)
 			}
@@ -415,6 +460,9 @@ func (c *statsCollector) emit(ch chan<- prometheus.Metric, data *wakatimeStatsDa
 
 	metric(c.aiTokens, float64(data.AIInputTokens), r, "input")
 	metric(c.aiTokens, float64(data.AIOutputTokens), r, "output")
+	if data.AICachedInputTokens != 0 {
+		metric(c.aiTokens, float64(data.AICachedInputTokens), r, "cached_input")
+	}
 	for _, model := range sortedCostModels(data.AIModelCosts) {
 		metric(c.aiCostUSD, data.AIModelCosts[model], r, model)
 	}
@@ -443,6 +491,24 @@ func (c *statsCollector) emit(ch chan<- prometheus.Metric, data *wakatimeStatsDa
 
 	metric(c.aiSessions, float64(data.AISessions), r)
 	metric(c.aiPromptEvents, float64(data.AIPromptEvents), r)
+	if data.AIPromptEventsAvgPerSession > 0 {
+		metric(c.aiPromptEventsAvgPerSession, data.AIPromptEventsAvgPerSession, r)
+	}
+	if data.AIPromptEventsMedianPerSession > 0 {
+		metric(c.aiPromptEventsMedianPerSession, data.AIPromptEventsMedianPerSession, r)
+	}
+	if data.AIPromptLengthAvg > 0 {
+		metric(c.aiPromptLengthAvg, data.AIPromptLengthAvg, r)
+	}
+	if data.AIPromptLengthAvgPerSession > 0 {
+		metric(c.aiPromptLengthAvgPerSession, data.AIPromptLengthAvgPerSession, r)
+	}
+	if data.AIPromptLengthMedianPerSession > 0 {
+		metric(c.aiPromptLengthMedianPerSession, data.AIPromptLengthMedianPerSession, r)
+	}
+	if data.AILineChangesTotal > 0 {
+		metric(c.aiLineChangesTotal, float64(data.AILineChangesTotal), r)
+	}
 }
 
 func boolToFloat(value bool) float64 {

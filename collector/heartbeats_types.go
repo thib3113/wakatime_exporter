@@ -27,8 +27,9 @@ type wakatimeHeartbeat struct {
 	Category       string  `json:"category"`
 	MachineNameID  string  `json:"machine_name_id"`
 	AISession      string  `json:"ai_session"`
-	AIInputTokens  int64   `json:"ai_input_tokens"`
-	AIOutputTokens int64   `json:"ai_output_tokens"`
-	IsWrite        bool    `json:"is_write"`
+	AIInputTokens       int64   `json:"ai_input_tokens"`
+	AIOutputTokens      int64   `json:"ai_output_tokens"`
+	AICachedInputTokens int64   `json:"ai_cached_input_tokens"`
+	IsWrite             bool    `json:"is_write"`
 	Time           float64 `json:"time"`
 }

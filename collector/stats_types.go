@@ -35,11 +35,18 @@ type wakatimeStatsData struct {
 	AIModelCosts       map[string]float64     `json:"ai_model_costs"`
 	AIModelBreakdown   []wakatimeStatsAIModel `json:"ai_model_breakdown"`
 	AIModelLineChanges map[string]int64       `json:"ai_model_line_changes"`
-	AIInputTokens      int64                  `json:"ai_input_tokens"`
-	AIOutputTokens     int64                  `json:"ai_output_tokens"`
-	AIPromptEvents     int64                  `json:"ai_prompt_events_total"`
-	AIPromptLengthSum  float64                `json:"ai_prompt_length_sum"`
-	AISessions         int64                  `json:"ai_sessions"`
+	AIInputTokens                  int64                  `json:"ai_input_tokens"`
+	AIOutputTokens                 int64                  `json:"ai_output_tokens"`
+	AICachedInputTokens            int64                  `json:"ai_cached_input_tokens"`
+	AIPromptEvents                 int64                  `json:"ai_prompt_events_total"`
+	AIPromptEventsAvgPerSession    float64                `json:"ai_prompt_events_avg_per_session"`
+	AIPromptEventsMedianPerSession float64                `json:"ai_prompt_events_median_per_session"`
+	AIPromptLengthAvg              float64                `json:"ai_prompt_length_avg"`
+	AIPromptLengthAvgPerSession    float64                `json:"ai_prompt_length_avg_per_session"`
+	AIPromptLengthMedianPerSession float64                `json:"ai_prompt_length_median_per_session"`
+	AIPromptLengthSum              float64                `json:"ai_prompt_length_sum"`
+	AILineChangesTotal             int64                  `json:"ai_line_changes_total"`
+	AISessions                     int64                  `json:"ai_sessions"`
 
 	Categories       []wakatimeStatsEntry   `json:"categories"`
 	Dependencies     []wakatimeStatsEntry   `json:"dependencies"`
@@ -95,8 +102,9 @@ type wakatimeStatsProject struct {
 	HumanAdditions int64              `json:"human_additions"`
 	HumanDeletions int64              `json:"human_deletions"`
 	AIModelCosts   map[string]float64 `json:"ai_model_costs"`
-	AIInputTokens  int64              `json:"ai_input_tokens"`
-	AIOutputTokens int64              `json:"ai_output_tokens"`
-	AIPromptEvents int64              `json:"ai_prompt_events_total"`
+	AIInputTokens       int64              `json:"ai_input_tokens"`
+	AIOutputTokens      int64              `json:"ai_output_tokens"`
+	AICachedInputTokens int64              `json:"ai_cached_input_tokens"`
+	AIPromptEvents      int64              `json:"ai_prompt_events_total"`
 	AISessions     int64              `json:"ai_sessions"`
 }

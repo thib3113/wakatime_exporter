@@ -94,6 +94,18 @@ func assertGaugeSample(t *testing.T, samples []metricSample, name string, want f
 	}
 }
 
+func assertCounterSample(t *testing.T, samples []metricSample, name string, want float64, labels map[string]string) {
+	t.Helper()
+
+	metric := findSample(samples, name, labels)
+	if metric == nil {
+		t.Fatalf("metric %s%v not found", name, labels)
+	}
+	if got := metric.GetCounter().GetValue(); got != want {
+		t.Fatalf("%s%v: got %v, want %v", name, labels, got, want)
+	}
+}
+
 func assertNoGaugeSample(t *testing.T, samples []metricSample, name string, labels map[string]string) {
 	t.Helper()
 

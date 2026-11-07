@@ -1,0 +1,430 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Utilisation IA Wakatime : couts par modele, tokens, lignes, sessions, prompts. Donnees nouvelles du nouvel exporter.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(increase(wakatime_durations_seconds_total{name=~\"${project:regex}\"}[$__range])) / 3600",
+          "legendFormat": "ai hours",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Time Period hours",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2,
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(increase(wakatime_ai_cost_usd_total[$__range]))",
+          "legendFormat": "cost",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Cost Period USD",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(increase(wakatime_ai_tokens_total[$__range]))",
+          "legendFormat": "tokens",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Tokens Period",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(increase(wakatime_ai_sessions_total[$__range]))",
+          "legendFormat": "sessions",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Sessions Period",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "id": 5,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (model) (increase(wakatime_ai_cost_usd_total[$__range])) > 0",
+          "instant": true,
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Cost by Model Period",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "id": 6,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (kind) (increase(wakatime_ai_tokens_total[$__range])) > 0",
+          "instant": true,
+          "legendFormat": "{{kind}}",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Tokens input vs output Period",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 7,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (name) (increase(wakatime_durations_seconds_total{name=~\"${project:regex}\"}[$__interval]))",
+          "interval": "",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Time by Project (barchart over time)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 8,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (model) (increase(wakatime_ai_cost_usd_total[$__interval]))",
+          "interval": "",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Cost by Model (barchart over time)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 23
+      },
+      "id": 9,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (kind, origin) (increase(wakatime_ai_lines_total[$__range])) > 0",
+          "instant": true,
+          "legendFormat": "{{origin}} {{kind}}",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Lines ai vs human Period",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 23
+      },
+      "id": 10,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(increase(wakatime_ai_prompt_events_total[$__range]))",
+          "legendFormat": "prompt events",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(wakatime_ai_prompt_length_avg_chars)",
+          "legendFormat": "avg prompt chars",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(increase(wakatime_ai_prompt_length_chars_sum[$__range]))",
+          "legendFormat": "sum prompt chars",
+          "refId": "C"
+        }
+      ],
+      "title": "Prompts Stats Period",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 23
+      },
+      "id": 11,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (kind) (increase(wakatime_ai_tokens_total[$__interval]))",
+          "interval": "",
+          "legendFormat": "{{kind}}",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Tokens Daily",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 42,
+  "tags": [
+    "wakatime",
+    "ai"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "Thanos",
+          "value": "thanos"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Prometheus",
+        "multi": false,
+        "name": "prometheus",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$prometheus"
+        },
+        "definition": "label_values(wakatime_durations_seconds_total, name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Project",
+        "multi": true,
+        "name": "project",
+        "options": [],
+        "query": "label_values(wakatime_durations_seconds_total, name)",
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Wakatime AI Insights",
+  "uid": "avb5gf",
+  "weekStart": ""
+}

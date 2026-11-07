@@ -26,10 +26,14 @@ func TestAITotalsAddDuration(t *testing.T) {
 		HumanDeletions:      1,
 		AIInputTokens:       120,
 		AIOutputTokens:      80,
+		AICachedInputTokens: 50,
 		AISessions:          4,
 		AIPromptEventsTotal: 6,
 		AIPromptLengthSum:   300,
 		AIModelCosts:        map[string]float64{"model-alpha": 0.5},
+		AIModelBreakdown: []wakatimeDurationAIModel{
+			{Name: "model-alpha", InputTokens: 120, OutputTokens: 80, CachedInputTokens: 50, Cost: 0.5, Lines: 12},
+		},
 	})
 	totals.addDuration(wakatimeDurationEntry{
 		AIAdditions:         1,
@@ -43,8 +47,11 @@ func TestAITotalsAddDuration(t *testing.T) {
 	if totals.additions != 11 || totals.deletions != 2 || totals.humanAdditions != 5 || totals.humanDeletions != 1 {
 		t.Fatalf("unexpected line totals: %#v", totals)
 	}
-	if totals.inputTokens != 140 || totals.outputTokens != 80 {
+	if totals.inputTokens != 140 || totals.outputTokens != 80 || totals.cachedInputTokens != 50 {
 		t.Fatalf("unexpected token totals: %#v", totals)
+	}
+	if totals.models["model-alpha"] == nil || totals.models["model-alpha"].inputTokens != 120 || totals.models["model-alpha"].lines != 12 {
+		t.Fatalf("unexpected model totals: %#v", totals.models)
 	}
 	if totals.sessions != 6 || totals.promptEvents != 7 || totals.promptLengthSum != 360 {
 		t.Fatalf("unexpected AI totals: %#v", totals)

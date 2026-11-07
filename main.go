@@ -354,6 +354,8 @@ func main() {
 		).Default("logfmt").Envar("WAKA_LOG_FORMAT").Enum("logfmt", "json")
 	)
 
+	loadDotEnv(".env")
+
 	kingpin.Version(version.Print("wakatime_exporter"))
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()

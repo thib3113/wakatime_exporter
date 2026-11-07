@@ -1,0 +1,497 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Overview corrige post-migration exporter (job-agnostic, leaderboard_rank). Remplace wakatime_rank casse.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(wakatime_cumulative_seconds_total) / 3600",
+          "legendFormat": "total",
+          "refId": "A"
+        }
+      ],
+      "title": "Time Logged All-Time (hours)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(increase(wakatime_seconds_total[$__range])) / 3600",
+          "legendFormat": "period",
+          "refId": "A"
+        }
+      ],
+      "title": "Time This Period (hours)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(wakatime_leaderboard_rank)",
+          "legendFormat": "rank",
+          "refId": "A"
+        }
+      ],
+      "title": "Current Leaderboard Rank",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 4,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(increase(wakatime_durations_seconds_total[$__range])) / 3600",
+          "legendFormat": "ai",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Time This Period (hours)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "id": 5,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum(increase(wakatime_seconds_total[$__interval]))",
+          "interval": "",
+          "legendFormat": "daily total",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Time Daily",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "id": 6,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (name) (increase(wakatime_language_seconds_total[$__interval]))",
+          "interval": "",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Time by Language Daily",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 100,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 7,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (name) (increase(wakatime_project_seconds_total{name=~\"$project\"}[$__interval]))",
+          "interval": "",
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Time by Project Daily",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 8,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "topk(10, sum by (name) (increase(wakatime_language_seconds_total{name!=\"Other\",name=~\"$project\"}[$__range])) > 0)",
+          "instant": true,
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Language Distribution Period",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 23
+      },
+      "id": 9,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (name) (increase(wakatime_editor_seconds_total[$__range])) > 0",
+          "instant": true,
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "$longterm",
+      "title": "Time by Editor Period",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 23
+      },
+      "id": 10,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (name) (increase(wakatime_machine_seconds_total[$__range])) > 0",
+          "instant": true,
+          "legendFormat": "{{name}}",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": "$longterm",
+      "title": "Time by Machine Period",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 23
+      },
+      "id": 11,
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (name) (increase(wakatime_operating_system_seconds_total[$__range])) > 0",
+          "instant": true,
+          "legendFormat": "OS {{name}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "expr": "sum by (name) (increase(wakatime_category_seconds_total[$__range])) > 0",
+          "instant": true,
+          "legendFormat": "Cat {{name}}",
+          "refId": "B"
+        }
+      ],
+      "timeFrom": "$longterm",
+      "title": "Time by OS Category Period",
+      "type": "barchart"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 42,
+  "tags": [
+    "wakatime",
+    "prometheus",
+    "overview"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "Thanos",
+          "value": "thanos"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Prometheus",
+        "multi": false,
+        "name": "prometheus",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "30d",
+          "value": "30d"
+        },
+        "hide": 0,
+        "label": "Long Term Interval",
+        "name": "longterm",
+        "options": [
+          {
+            "selected": false,
+            "text": "1d",
+            "value": "1d"
+          },
+          {
+            "selected": false,
+            "text": "7d",
+            "value": "7d"
+          },
+          {
+            "selected": true,
+            "text": "30d",
+            "value": "30d"
+          },
+          {
+            "selected": false,
+            "text": "120d",
+            "value": "120d"
+          }
+        ],
+        "query": "1d,7d,14d,30d,60d,120d",
+        "type": "interval"
+      },
+      {
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$prometheus"
+        },
+        "definition": "label_values(wakatime_project_seconds_total, name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Project",
+        "multi": true,
+        "name": "project",
+        "options": [],
+        "query": "label_values(wakatime_project_seconds_total, name)",
+        "refresh": 2,
+        "regex": "",
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Wakatime Overview V2",
+  "uid": "a7dxg4",
+  "weekStart": ""
+}

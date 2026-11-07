@@ -13,3 +13,7 @@
 
 # Dependency directories
 vendor/
+
+# Local environment & secret files
+.env
+.env.*
